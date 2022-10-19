@@ -26,4 +26,19 @@ tokensRoutes.route("/token/add").post(function (req, response) {
       response.json(res);
     });
   });
+
+// This section will help you get a single record by id
+tokensRoutes.route("/token/:id").get((req, res) => {
+  let db_connect = dbo.getDb();
+  let id = { daoID: ObjectId(req.params.id) };
+  db_connect
+    .collection("Tokens")
+    .findOne(id, function (err, result) {
+      if (err) throw err;
+      res.json(result);
+    });
+});
+
 module.exports = tokensRoutes
+
+

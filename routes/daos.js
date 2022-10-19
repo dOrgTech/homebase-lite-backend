@@ -13,19 +13,36 @@ const ObjectId = require("mongodb").ObjectId;
 
 
 // This section will help you get a list of all the records.
-daoRoutes.route("/daos").get(function (req, res) {
+daoRoutes.route("/daos").get((req, res) => {
   let db_connect = dbo.getDb("Lite");
   db_connect
     .collection("DAOs")
     .find({})
-    .toArray(function (err, result) {
+    .toArray((err, result) => {
       if (err) throw err;
       res.json(result);
     });
 });
 
+daoRoutes.route("/daos/subscription").get((req, res) => {
+  let db_connect = dbo.getDb();
+  let cachedResumeToken;
+  let change_streams = db_connect.collection('DAOs').watch()
+  change_streams.on('change', function (change) {
+    console.log(change)
+    cachedResumeToken = change["_id"]
+    res.status(200);
+  })
+
+  change_streams.on('error', () => {
+    if (cachedResumeToken) {
+      establishChangeStream(cachedResumeToken)
+    }
+  })
+});
+
 // This section will help you get a single record by id
-daoRoutes.route("/daos/:id").get(function (req, res) {
+daoRoutes.route("/daos/:id").get((req, res) => {
   let db_connect = dbo.getDb();
   let id = { _id: ObjectId(req.params.id) };
   db_connect
