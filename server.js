@@ -8,7 +8,7 @@ app.use(express.json());
 app.use(require("./routes/daos"));
 app.use(require("./routes/polls"));
 app.use(require("./routes/tokens"));
-
+app.use(require("./routes/choices"));
 // get driver connection
 const dbo = require("./db/conn");
  
