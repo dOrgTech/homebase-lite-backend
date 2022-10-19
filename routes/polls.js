@@ -55,21 +55,33 @@ pollsRoutes.route("/poll/add").post(async function (req, response) {
     referenceBlock: req.body.referenceBlock,
     totalSupplyAtReferenceBlock: req.body.totalSupplyAtReferenceBlock,
     _id: poll_id,
-    choices: choicesPoll
+    choices: choicesPoll,
+    author: req.body.author
   };
+
+  let data = {
+    $push: {
+      polls: poll_id
+    },
+  };
+
+  let id = { _id: ObjectId(req.body.daoID) };
 
   try {
     await session.withTransaction(async () => {
       const coll1 = db_connect.collection('Polls');
       const coll2 = db_connect.collection('Choices');
+      const coll3 = db_connect.collection('DAOs');
       // Important:: You must pass the session to the operations
       await coll1.insertOne(PollData, { session });
 
       await coll2.insertMany(ChoicesData, { session })
+      
+      await coll3.updateOne(id, data, {session} )
     }).then(res => response.json(res));
   } catch (e) {
     result = e.Message;
-    console.warn(result);
+    console.log(e);
     await session.abortTransaction();
   } finally {
     await session.endSession();
