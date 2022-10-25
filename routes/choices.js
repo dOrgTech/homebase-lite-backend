@@ -36,7 +36,6 @@ choicesRoutes.route("/update/:id/choice").post(function (req, response) {
       .collection("Choices")
       .updateOne(id, data, { upsert: true }, function (err, res) {
         if (err) throw err;
-        console.log("1 document updated");
         response.json(res);
       });
   });
@@ -67,8 +66,6 @@ choicesRoutes.route("/choices/:id/add").post(async function (req, response) {
     },
   };
 
-  console.log(req.body.oldVote._id)
-  console.log(req.body.oldVote.walletAddresses[0].address);
   let remove = { $pull: { 'walletAddresses': {address: req.body.oldVote.walletAddresses[0].address} } }
 
   try {

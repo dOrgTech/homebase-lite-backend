@@ -29,7 +29,6 @@ daoRoutes.route("/daos/subscription").get((req, res) => {
   let cachedResumeToken;
   let change_streams = db_connect.collection('DAOs').watch()
   change_streams.on('change', function (change) {
-    console.log(change)
     cachedResumeToken = change["_id"]
     res.status(200);
   })
@@ -66,7 +65,6 @@ daoRoutes.route("/update/:id").post(function (req, response) {
     .collection("DAOs")
     .updateOne(id, data, function (err, res) {
       if (err) throw err;
-      console.log("1 document updated");
       response.json(res);
     });
 });
