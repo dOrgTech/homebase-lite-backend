@@ -92,8 +92,6 @@ daoRoutes.route("/dao/add").post(async function (req, response) {
     _id: original_id
   };
 
-
-
   try {
     await session.withTransaction(async () => {
       const coll1 = db_connect.collection('DAOs');
