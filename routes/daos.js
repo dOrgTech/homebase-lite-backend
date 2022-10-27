@@ -105,7 +105,8 @@ daoRoutes.route("/dao/add").post(async function (req, response) {
           tokenType: req.body.tokenType,
           symbol: req.body.symbol,
           tokenID: req.body.tokenID,
-          daoID: original_id
+          daoID: original_id,
+          decimals: req.body.decimals,
         }
         , { session })
     }).then(res => response.json(res));
