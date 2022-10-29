@@ -1,9 +1,9 @@
 const { verifySignature } = require("@taquito/utils");
 
 const requireSignature = async (request, response, next) => {
-  const { signature, userAddress, publicKey, payloadBytes } = request.body;
+  const { signature, publicKey, payloadBytes } = request.body;
 
-  if (!signature || !userAddress || !publicKey) {
+  if (!signature || !publicKey || !payloadBytes) {
     response.status(500).send("Invalid Signature Payload");
     return;
   }
