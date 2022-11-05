@@ -8,6 +8,11 @@ const pollsRoutes = express.Router();
 // This will help us connect to the database
 const dbo = require("../db/conn");
 const { requireSignature } = require("../middlewares");
+const {
+  getTotalSupplyAtReferenceBlock,
+  getInputFromSigPayload,
+  getCurrentBlock,
+} = require("../utils");
 
 // This help convert the id from string to ObjectId for the _id.
 const ObjectId = require("mongodb").ObjectId;
@@ -27,7 +32,8 @@ pollsRoutes
   .route("/poll/add")
   .all(requireSignature)
   .post(async function (req, response) {
-    const { values } = req.body;
+    const { payloadBytes } = req.body;
+    const values = getInputFromSigPayload(payloadBytes);
 
     const mongoClient = dbo.getClient();
     const session = mongoClient.startSession();
@@ -48,6 +54,21 @@ pollsRoutes
       return element._id;
     });
 
+    const dao = await db_connect
+      .collection("DAOs")
+      .findOne({ _id: ObjectId(values.daoID) });
+
+    const block = await getCurrentBlock(dao.network);
+    const total = await getTotalSupplyAtReferenceBlock(
+      dao.network,
+      dao.tokenAddress,
+      block
+    );
+
+    if (!total) {
+      await session.abortTransaction();
+    }
+
     let PollData = {
       name: values.name,
       description: values.description,
@@ -55,8 +76,8 @@ pollsRoutes
       startTime: values.startTime,
       endTime: values.endTime,
       daoID: values.daoID,
-      referenceBlock: values.referenceBlock,
-      totalSupplyAtReferenceBlock: values.totalSupplyAtReferenceBlock,
+      referenceBlock: block,
+      totalSupplyAtReferenceBlock: total,
       _id: poll_id,
       choices: choicesPoll,
       author: values.author,
