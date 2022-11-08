@@ -3,7 +3,8 @@ const axios = require("axios");
 
 const getInputFromSigPayload = (payloadBytes) => {
   const parsedPayloadBytesString = bytes2Char(payloadBytes);
-  const valuesString = parsedPayloadBytesString.split(" ").slice(-1)[0];
+  const valuesParsed = parsedPayloadBytesString.split(" ");
+  const valuesString = valuesParsed.splice(5, valuesParsed.length).join(" ");
   const values = JSON.parse(valuesString);
 
   return values;
