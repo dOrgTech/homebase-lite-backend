@@ -15,11 +15,12 @@ const { getInputFromSigPayload } = require("../utils");
 const ObjectId = require("mongodb").ObjectId;
 
 // This section will help you get a list of all the records.
-daoRoutes.route("/daos").get((req, res) => {
+daoRoutes.route("/daos").post((req, res) => {
+  const { network } = req.body;
   let db_connect = dbo.getDb("Lite");
   db_connect
     .collection("DAOs")
-    .find({})
+    .find({ network })
     .toArray((err, result) => {
       if (err) throw err;
       res.json(result);
