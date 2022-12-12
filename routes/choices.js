@@ -59,13 +59,17 @@ choicesRoutes
         .collection("DAOs")
         .findOne({ _id: ObjectId(poll.daoID) });
 
-      const block = await getCurrentBlock(dao.network);
+      const block = poll.referenceBlock;
       const total = await getUserTotalSupplyAtReferenceBlock(
         dao.network,
         dao.tokenAddress,
         block,
         address
       );
+
+      if (total === 0) {
+        throw "No balance at proposal level";
+      }
 
       const walletVote = {
         address,
@@ -162,6 +166,7 @@ choicesRoutes
           });
       }
     } catch (error) {
+      console.log("error: ", error);
       response.status(400).send({
         message: "Can't Vote",
       });
