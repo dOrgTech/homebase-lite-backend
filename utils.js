@@ -46,7 +46,11 @@ const getUserTotalSupplyAtReferenceBlock = async (
   const response = await axios({ url, method: "GET" });
   if (response.status === 200) {
     const result = response.data;
-    return result[0].balance;
+    if (result.length > 0) {
+      return result[0].balance;
+    } else {
+      return 0;
+    }
   }
 
   return 0;
