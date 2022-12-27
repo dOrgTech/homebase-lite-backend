@@ -18,39 +18,39 @@ const ObjectId = require("mongodb").ObjectId;
 daoRoutes.route("/daos").post((req, res) => {
   const { network } = req.body;
   let db_connect = dbo.getDb("Lite");
-  db_connect
-    .collection("DAOs")
-    .find({ network })
-    .toArray((err, result) => {
-      if (err) throw err;
-      res.json(result);
+
+  try {
+    db_connect
+      .collection("DAOs")
+      .find({ network })
+      .toArray((err, result) => {
+        if (err) throw err;
+        res.json(result);
+      })
+  } catch (error) {
+    console.log("error: ", error);
+    response.status(400).send({
+      message: "Error retrieving the list of communities ",
     });
-});
+  }
 
-daoRoutes.route("/daos/subscription").get((req, res) => {
-  let db_connect = dbo.getDb();
-  let cachedResumeToken;
-  let change_streams = db_connect.collection("DAOs").watch();
-  change_streams.on("change", function (change) {
-    cachedResumeToken = change["_id"];
-    res.status(200);
-  });
-
-  change_streams.on("error", () => {
-    if (cachedResumeToken) {
-      establishChangeStream(cachedResumeToken);
-    }
-  });
 });
 
 // This section will help you get a single record by id
 daoRoutes.route("/daos/:id").get((req, res) => {
-  let db_connect = dbo.getDb();
-  let id = { _id: ObjectId(req.params.id) };
-  db_connect.collection("DAOs").findOne(id, function (err, result) {
-    if (err) throw err;
-    res.json(result);
-  });
+  try {
+    let db_connect = dbo.getDb();
+    let id = { _id: ObjectId(req.params.id) };
+    db_connect.collection("DAOs").findOne(id, function (err, result) {
+      if (err) throw err;
+      res.json(result);
+    })
+  } catch (error) {
+    console.log("error: ", error);
+    response.status(400).send({
+      message: "Community not found ",
+    });
+  }
 });
 
 // This section will help you update a record by id.
@@ -58,36 +58,43 @@ daoRoutes
   .route("/daos/join")
   .all(requireSignature)
   .post(function (req, response) {
-    const { payloadBytes } = req.body;
-    const values = getInputFromSigPayload(payloadBytes);
-    const { address, daoId } = values;
+    try {
+      const { payloadBytes } = req.body;
+      const values = getInputFromSigPayload(payloadBytes);
+      const { address, daoId } = values;
 
-    let db_connect = dbo.getDb();
-    let id = { _id: ObjectId(daoId) };
-    let data = [
-      {
-        $set: {
-          members: {
-            $cond: [
-              {
-                $in: [address, "$members"],
-              },
-              {
-                $setDifference: ["$members", [address]],
-              },
-              {
-                $concatArrays: ["$members", [address]],
-              },
-            ],
+      let db_connect = dbo.getDb();
+      let id = { _id: ObjectId(daoId) };
+      let data = [
+        {
+          $set: {
+            members: {
+              $cond: [
+                {
+                  $in: [address, "$members"],
+                },
+                {
+                  $setDifference: ["$members", [address]],
+                },
+                {
+                  $concatArrays: ["$members", [address]],
+                },
+              ],
+            },
           },
         },
-      },
-    ];
-    db_connect.collection("DAOs").updateOne(id, data, function (err, res) {
-      if (err) throw err;
-      response.json(res);
-    });
-  });
+      ];
+      db_connect.collection("DAOs").updateOne(id, data, function (err, res) {
+        if (err) throw err;
+        response.json(res);
+      })
+    } catch (error) {
+      console.log("error: ", error);
+      response.status(400).send({
+        message: "Could not join community",
+      });
+    }
+  })
 
 // This section will help you create a new record.
 daoRoutes
