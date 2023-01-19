@@ -26,7 +26,7 @@ choicesRoutes.route("/choices/:id/find").get(async (req, res) => {
       .find({ pollID: ObjectId(req.params.id) });
 
     await cursor.forEach((elem) => choices.push(elem));
-    return res.json(choices)
+    return res.json(choices);
   } catch (error) {
     console.log("error: ", error);
     response.status(400).send({
@@ -65,10 +65,15 @@ choicesRoutes
         .collection("DAOs")
         .findOne({ _id: ObjectId(poll.daoID) });
 
+      const token = await db_connect
+        .collection("Tokens")
+        .findOne({ tokenAddress: dao.tokenAddress });
+
       const block = poll.referenceBlock;
       const total = await getUserTotalSupplyAtReferenceBlock(
         dao.network,
         dao.tokenAddress,
+        token.tokenID,
         block,
         address
       );
@@ -185,10 +190,13 @@ choicesRoutes.route("/choices/:id/user").get(async (req, response) => {
     let db_connect = dbo.getDb();
     db_connect
       .collection("Choices")
-      .findOne({ "walletAddresses.address": req.params.id }, function (err, res) {
-        if (err) throw err;
-        response.json(res);
-      })
+      .findOne(
+        { "walletAddresses.address": req.params.id },
+        function (err, res) {
+          if (err) throw err;
+          response.json(res);
+        }
+      );
   } catch (error) {
     console.log("error: ", error);
     response.status(400).send({
