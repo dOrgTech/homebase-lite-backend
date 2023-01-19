@@ -9,9 +9,9 @@ const pollsRoutes = express.Router();
 const dbo = require("../db/conn");
 const { requireSignature } = require("../middlewares");
 const {
-  getTotalSupplyAtReferenceBlock,
   getInputFromSigPayload,
   getCurrentBlock,
+  getTotalSupplyAtCurrentBlock,
 } = require("../utils");
 
 // This help convert the id from string to ObjectId for the _id.
@@ -25,7 +25,7 @@ pollsRoutes.route("/polls/:id/polls").get(function (req, res) {
     db_connect.collection("Polls").findOne(myquery, function (err, result) {
       if (err) throw err;
       res.json(result);
-    })
+    });
   } catch (error) {
     console.log("error: ", error);
     response.status(400).send({
@@ -38,10 +38,14 @@ pollsRoutes.route("/polls/:id/polls").get(function (req, res) {
 pollsRoutes.route("/polls/list").get(async function (req, res) {
   try {
     let db_connect = dbo.getDb();
-    db_connect.collection('Polls').find({}).sort({ _id: -1 }).toArray(function (err, docs) {
-      if (err) throw err;
-      res.json(docs);
-    })
+    db_connect
+      .collection("Polls")
+      .find({})
+      .sort({ _id: -1 })
+      .toArray(function (err, docs) {
+        if (err) throw err;
+        res.json(docs);
+      });
   } catch (error) {
     console.log("error: ", error);
     response.status(400).send({
@@ -82,10 +86,15 @@ pollsRoutes
         .collection("DAOs")
         .findOne({ _id: ObjectId(values.daoID) });
 
+      const token = await db_connect
+        .collection("Tokens")
+        .findOne({ tokenAddress: dao.tokenAddress });
+
       const block = await getCurrentBlock(dao.network);
-      const total = await getTotalSupplyAtReferenceBlock(
+      const total = await getTotalSupplyAtCurrentBlock(
         dao.network,
         dao.tokenAddress,
+        token.tokenID,
         block
       );
 

@@ -10,13 +10,13 @@ const getInputFromSigPayload = (payloadBytes) => {
   return values;
 };
 
-const getTotalSupplyAtReferenceBlock = async (network, address, level) => {
+const getTotalSupplyAtCurrentBlock = async (network, address, tokenID) => {
   try {
-    const url = `https://api.${network}.tzkt.io/v1/contracts/${address}/bigmaps/token_total_supply/historical_keys/${level}`;
+    const url = `https://api.${network}.tzkt.io/v1/tokens?contract=${address}&tokenId=${tokenID}`;
     const response = await axios({ url, method: "GET" });
 
     if (response.status === 200) {
-      return response.data[0].value;
+      return response.data[0].totalSupply;
     }
   } catch (error) {
     console.log("error: ", error);
@@ -39,10 +39,11 @@ const getCurrentBlock = async (network) => {
 const getUserTotalSupplyAtReferenceBlock = async (
   network,
   address,
+  tokenID,
   level,
   userAddress
 ) => {
-  const url = `https://api.${network}.tzkt.io/v1/tokens/historical_balances/${level}?account=${userAddress}&token.contract=${address}`;
+  const url = `https://api.${network}.tzkt.io/v1/tokens/historical_balances/${level}?account=${userAddress}&token.contract=${address}&token.tokenId=${tokenID}`;
   const response = await axios({ url, method: "GET" });
   if (response.status === 200) {
     const result = response.data;
@@ -58,7 +59,7 @@ const getUserTotalSupplyAtReferenceBlock = async (
 
 module.exports = {
   getInputFromSigPayload,
-  getTotalSupplyAtReferenceBlock,
+  getTotalSupplyAtCurrentBlock,
   getCurrentBlock,
   getUserTotalSupplyAtReferenceBlock,
 };
