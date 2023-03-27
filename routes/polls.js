@@ -114,6 +114,7 @@ pollsRoutes
         _id: poll_id,
         choices: choicesPoll,
         author: values.author,
+        votingStrategy: values.votingStrategy
       };
 
       let data = {
