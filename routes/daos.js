@@ -9,6 +9,7 @@ const daoRoutes = express.Router();
 // This will help us connect to the database
 const dbo = require("../db/conn");
 const { requireSignature } = require("../middlewares");
+const { getTokenMetadata } = require("../services");
 const { getInputFromSigPayload } = require("../utils");
 
 // This help convert the id from string to ObjectId for the _id.
@@ -120,6 +121,17 @@ daoRoutes
 
     const original_id = ObjectId();
 
+    const tokenAddress = values.tokenAddress;
+    const tokenID = values.tokenID;
+
+    const tokenData = await getTokenMetadata(
+      tokenAddress,
+      values.network,
+      tokenID
+    );
+
+    console.log("tokenData: ", tokenData);
+
     let DAOData = {
       name: values.name,
       description: values.description,
@@ -128,7 +140,7 @@ daoRoutes
       members: values.members,
       polls: values.polls,
       tokenAddress: values.tokenAddress,
-      tokenType: values.tokenType,
+      tokenType: tokenData.standard,
       requiredTokenOwnership: values.requiredTokenOwnership,
       allowPublicAccess: values.allowPublicAccess,
       _id: original_id,
@@ -145,12 +157,12 @@ daoRoutes
 
           await coll2.insertOne(
             {
-              tokenAddress: values.tokenAddress,
-              tokenType: values.tokenType,
-              symbol: values.symbol,
-              tokenID: values.tokenID,
+              tokenAddress,
+              tokenType: tokenData.standard,
+              symbol: tokenData.metadata.symbol,
+              tokenID: Number(tokenID),
               daoID: original_id,
-              decimals: values.decimals,
+              decimals: Number(tokenData.metadata.decimals),
             },
             { session }
           );
