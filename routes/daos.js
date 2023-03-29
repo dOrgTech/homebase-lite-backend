@@ -15,25 +15,35 @@ const { getInputFromSigPayload } = require("../utils");
 const ObjectId = require("mongodb").ObjectId;
 
 // This section will help you get a list of all the records.
-daoRoutes.route("/daos").post((req, res) => {
+daoRoutes.route("/daos").post(async (req, res) => {
   const { network } = req.body;
   let db_connect = dbo.getDb("Lite");
+  const TokensCollection = db_connect.collection("Tokens");
 
   try {
-    db_connect
+    const result = await db_connect
       .collection("DAOs")
       .find({ network })
-      .toArray((err, result) => {
-        if (err) throw err;
-        res.json(result);
+      .toArray();
+
+    const newResult = await Promise.all(
+      result.map(async (result) => {
+        const token = await TokensCollection.findOne({ daoID: result._id });
+
+        return {
+          ...result,
+          ...token,
+        };
       })
+    );
+
+    res.json(newResult);
   } catch (error) {
     console.log("error: ", error);
     response.status(400).send({
       message: "Error retrieving the list of communities ",
     });
   }
-
 });
 
 // This section will help you get a single record by id
@@ -44,7 +54,7 @@ daoRoutes.route("/daos/:id").get((req, res) => {
     db_connect.collection("DAOs").findOne(id, function (err, result) {
       if (err) throw err;
       res.json(result);
-    })
+    });
   } catch (error) {
     console.log("error: ", error);
     response.status(400).send({
@@ -87,14 +97,14 @@ daoRoutes
       db_connect.collection("DAOs").updateOne(id, data, function (err, res) {
         if (err) throw err;
         response.json(res);
-      })
+      });
     } catch (error) {
       console.log("error: ", error);
       response.status(400).send({
         message: "Could not join community",
       });
     }
-  })
+  });
 
 // This section will help you create a new record.
 daoRoutes
