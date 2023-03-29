@@ -130,8 +130,6 @@ daoRoutes
       tokenID
     );
 
-    console.log("tokenData: ", tokenData);
-
     let DAOData = {
       name: values.name,
       description: values.description,

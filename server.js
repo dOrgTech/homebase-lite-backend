@@ -22,12 +22,6 @@ app.listen(port, async () => {
   dbo.connectToServer(function (err) {
     if (err) console.error(err);
   });
-  const tokenData = await getTokenMetadata(
-    "KT1QVMpfK12j9v8wy8s4v2EK3EHHH8jvisnW",
-    "ghostnet",
-    0
-  );
-  console.log("tokenData: ", tokenData);
 
   console.log(`Server is running on port: ${port}`);
 });
