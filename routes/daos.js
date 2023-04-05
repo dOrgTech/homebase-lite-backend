@@ -32,8 +32,9 @@ daoRoutes.route("/daos").post(async (req, res) => {
         const token = await TokensCollection.findOne({ daoID: result._id });
 
         return {
-          ...result,
           ...token,
+          ...result,
+          _id: result._id,
         };
       })
     );
