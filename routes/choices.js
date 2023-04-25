@@ -66,7 +66,7 @@ choicesRoutes
 
       const block = poll.referenceBlock;
 
-      console.log("empieza con estos values: ", values, values.length)
+
       values.forEach(async (value) => {
 
         const { address, choice: choiceName, choiceId } = value;
@@ -83,20 +83,15 @@ choicesRoutes
           throw "No balance at proposal level";
         }
 
-        if (values.length > 1) {
-          total = total / values.length
-        }
-
-        const choice = await db_connect
-          .collection("Choices")
-          .findOne({ _id: ObjectId(choiceId) });
-
-
         const walletVote = {
           address,
           balanceAtReferenceBlock: total,
           choiceId
         };
+
+        const choice = await db_connect
+          .collection("Choices")
+          .findOne({ _id: ObjectId(choiceId) });
 
         const isVoted = await db_connect.collection("Polls").find({
           _id: poll._id,
@@ -160,7 +155,6 @@ choicesRoutes
               await session.endSession();
             }
           } else {
-            console.log("entra aca")
             const mongoClient = dbo.getClient();
             const session = mongoClient.startSession();
             let db_connect = dbo.getDb();
@@ -173,12 +167,9 @@ choicesRoutes
                 }
               }
 
-              console.log("address: ", address)
-              console.log("choiceId: ", choiceId)
-
               let removePoll = {
                 $pull: {
-                  votes: { address: String(address) } & { choiceId: String(choiceId) }
+                  votes: { address: String(address) } && { choiceId: String(choiceId) }
                 }
               }
 
@@ -200,17 +191,25 @@ choicesRoutes
                     { remove: true },
                     { session },
                     function (err, res) {
-                      console.log("res pullPoll", res)
                       if (err) throw err;
                     }
                   );
+
+                  const alreadyExists = await db_connect
+                    .collection("Polls")
+                    .findOne({ _id: ObjectId(values[0].pollID), choiceId: choiceId, address: address })
 
                   const updatedPoll = await db_connect
                     .collection("Polls")
                     .findOne({ _id: ObjectId(values[0].pollID) });
 
+
                   let totalVotes = updatedPoll.votes.length;
-                  console.log(totalVotes);
+
+                  if (!alreadyExists || alreadyExists === null) {
+                    totalVotes += 1
+                  }
+                  
                   const distributedWeight = total / totalVotes;
 
                   const walletDistributedVote = {
@@ -231,8 +230,6 @@ choicesRoutes
                     }
                   );
 
-                  console.log("se ejecuta 1")
-
                   await coll1.updateOne(
                     {
                       _id: choice._id,
@@ -244,7 +241,6 @@ choicesRoutes
                       if (err) throw err;
                     }
                   );
-                  console.log("se ejecuta 2")
 
                   await coll2.updateMany(
                     {
@@ -257,9 +253,6 @@ choicesRoutes
                       if (err) throw err;
                     }
                   );
-
-                  console.log("se ejecuta 3")
-
                   // Important:: You must pass the session to the operations
                   await coll1.updateMany(
                     {
@@ -270,16 +263,13 @@ choicesRoutes
                     { session }
                   );
 
-                  console.log("se ejecuta 4")
-
                 })
                 .then((res) => response.json(res));
             } catch (e) {
               result = e.Message;
-              console.warn("entra 1", e);
+              console.warn("error", e)
               await session.abortTransaction();
             } finally {
-              console.warn("entra 2");
               await session.endSession();
             }
           }
@@ -287,6 +277,17 @@ choicesRoutes
           const mongoClient = dbo.getClient();
           const session = mongoClient.startSession();
           let db_connect = dbo.getDb();
+
+          if (values.length > 1) {
+            total = total / values.length
+          }
+
+          const walletVoteSingle = {
+            address,
+            balanceAtReferenceBlock: total,
+            choiceId
+          };
+
           try {
             await session
               .withTransaction(async () => {
@@ -294,7 +295,7 @@ choicesRoutes
                   {
                     _id: poll._id,
                   },
-                  { $push: { votes: walletVote } },
+                  { $push: { votes: walletVoteSingle } },
                   { upsert: true },
                   { session },
                   function (err, res) {
@@ -305,7 +306,7 @@ choicesRoutes
                 let id = { _id: choice._id };
                 let data = {
                   $push: {
-                    walletAddresses: walletVote,
+                    walletAddresses: walletVoteSingle,
                   },
                 };
                 await db_connect
@@ -319,7 +320,6 @@ choicesRoutes
               }).then(res => response.json(res))
 
           } catch (error) {
-            console.log("error: ", error);
             response.status(400).send({
               message: "Can't Vote",
             });
@@ -329,7 +329,6 @@ choicesRoutes
 
       })
     } catch (error) {
-      console.log("error: ", error);
       response.status(400).send({
         message: "Can't Vote",
       });
