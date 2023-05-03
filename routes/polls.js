@@ -35,12 +35,12 @@ pollsRoutes.route("/polls/:id/polls").get(function (req, res) {
 });
 
 // This section will help you get a single record by id
-pollsRoutes.route("/polls/list").get(async function (req, res) {
+pollsRoutes.route("/polls/:id/list").get(async function (req, res) {
   try {
     let db_connect = dbo.getDb();
     db_connect
       .collection("Polls")
-      .find({})
+      .find({ daoID: req.params.id })
       .sort({ _id: -1 })
       .toArray(function (err, docs) {
         if (err) throw err;
@@ -114,7 +114,7 @@ pollsRoutes
         _id: poll_id,
         choices: choicesPoll,
         author: values.author,
-        votingStrategy: values.votingStrategy
+        votingStrategy: values.votingStrategy,
       };
 
       let data = {
