@@ -144,6 +144,7 @@ daoRoutes
       allowPublicAccess: values.allowPublicAccess,
       _id: original_id,
       network: values.network,
+      daoContract: values?.daoContract,
     };
 
     try {
