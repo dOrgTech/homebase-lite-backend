@@ -16,7 +16,7 @@ const getChoiceById = async (req, response) => {
   try {
     const choices = [];
     let db_connect = dbo.getDb("Lite");
-    const cursor = db_connect
+    const cursor = await db_connect
       .collection("Choices")
       .find({ pollID: ObjectId(id) });
 
@@ -166,7 +166,6 @@ const updateChoiceById = async (req, response) => {
             walletAddresses: { $elemMatch: { address: address } },
           })
           .toArray();
-        console.log("isVotedOnChoice: ", isVotedOnChoice);
 
         if (isVotedOnChoice && isVotedOnChoice.length > 0) {
           console.log("here");
@@ -233,7 +232,7 @@ const updateChoiceById = async (req, response) => {
         }
       }
     } else {
-      db_connect.collection("Polls").updateOne(
+      await db_connect.collection("Polls").updateOne(
         {
           _id: poll._id,
         },
@@ -247,7 +246,7 @@ const updateChoiceById = async (req, response) => {
           walletAddresses: walletVote,
         },
       };
-      const res = db_connect
+      const res = await db_connect
         .collection("Choices")
         .updateOne(newId, data, { upsert: true });
 
@@ -266,7 +265,7 @@ const choicesByUser = async (req, response) => {
 
   try {
     let db_connect = dbo.getDb();
-    const res = db_connect
+    const res = await db_connect
       .collection("Choices")
       .findOne({ "walletAddresses.address": id });
 

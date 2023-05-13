@@ -13,7 +13,10 @@ const getAllLiteOnlyDAOs = async (req, response) => {
 
     const TokensCollection = db_connect.collection("Tokens");
     const DAOCollection = db_connect.collection("DAOs");
-    const result = DAOCollection.find({ network, daoContract: null }).toArray();
+    const result = await DAOCollection.find({
+      network,
+      daoContract: null,
+    }).toArray();
 
     const newResult = await Promise.all(
       result.map(async (result) => {
@@ -157,7 +160,7 @@ const createDAO = async (req, response) => {
   }
 };
 
-const joinDAO = (req, response) => {
+const joinDAO = async (req, response) => {
   const { payloadBytes } = req.body;
 
   try {
@@ -187,7 +190,7 @@ const joinDAO = (req, response) => {
       },
     ];
 
-    DAOCollection.updateOne(id, data);
+    await DAOCollection.updateOne(id, data);
 
     response.json(res);
   } catch (error) {
