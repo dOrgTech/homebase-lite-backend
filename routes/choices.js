@@ -7,6 +7,7 @@ const {
   updateChoiceById,
   choicesByUser,
   addChoice,
+  getPollVotes
 } = require("../components/choices");
 
 const choicesRoutes = express.Router();
@@ -21,5 +22,6 @@ choicesRoutes
 choicesRoutes.route("/choices/:id/user").get(choicesByUser);
 // This section will help you create a new record.
 choicesRoutes.route("/choices/:id/add").all(requireSignature).post(addChoice);
+choicesRoutes.route("/choices/:id/votes").get(getPollVotes);
 
 module.exports = choicesRoutes;

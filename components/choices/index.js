@@ -174,6 +174,8 @@ const updateChoiceById = async (req, response) => {
                   { $push: { walletAddresses: walletVote } },
                   { upsert: true }
                 );
+
+                
                 i++
 
               })
@@ -297,9 +299,39 @@ const addChoice = async function (req, response) {
   }
 };
 
+const getPollVotes = async (req, response) => {
+  const { id } = req.params;
+  let total = 0;
+
+  try {
+    const choices = [];
+    let db_connect = dbo.getDb("Lite");
+    const cursor = await db_connect
+      .collection("Choices")
+      .find(
+        {
+          pollID: ObjectId(id)
+        }
+
+      );
+
+    await cursor.forEach((elem) => choices.push(elem));
+    choices.forEach(choice => total += choice.walletAddresses.length)
+    return response.json(total);
+
+  } catch (error) {
+    console.log("error: ", error);
+    response.status(400).send({
+      message: "Error retrieving poll ",
+    });
+  }
+};
+
+
 module.exports = {
   getChoiceById,
   updateChoiceById,
   choicesByUser,
   addChoice,
+  getPollVotes
 };
