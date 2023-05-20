@@ -14,7 +14,7 @@ const choicesRoutes = express.Router();
 choicesRoutes.route("/choices/:id/find").get(getChoiceById);
 // This section will help you update a record by id.
 choicesRoutes
-  .route("/update/:id/choice")
+  .route("/update/choice")
   .all(requireSignature)
   .post(updateChoiceById);
 // This section will help you get a single record by id (pollID)
