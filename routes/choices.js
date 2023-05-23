@@ -7,6 +7,7 @@ const {
   updateChoiceById,
   choicesByUser,
   addChoice,
+  getPollVotes
 } = require("../components/choices");
 
 const choicesRoutes = express.Router();
@@ -14,12 +15,13 @@ const choicesRoutes = express.Router();
 choicesRoutes.route("/choices/:id/find").get(getChoiceById);
 // This section will help you update a record by id.
 choicesRoutes
-  .route("/update/:id/choice")
+  .route("/update/choice")
   .all(requireSignature)
   .post(updateChoiceById);
 // This section will help you get a single record by id (pollID)
 choicesRoutes.route("/choices/:id/user").get(choicesByUser);
 // This section will help you create a new record.
 choicesRoutes.route("/choices/:id/add").all(requireSignature).post(addChoice);
+choicesRoutes.route("/choices/:id/votes").get(getPollVotes);
 
 module.exports = choicesRoutes;
