@@ -15,7 +15,6 @@ const getTokenMetadata = async (contractAddress, network, tokenId) => {
   }
 
   const resultTokenDataTzkt = response.data;
-  console.log("resultTokenDataTzkt: ", resultTokenDataTzkt);
   const tokenData = resultTokenDataTzkt[0];
 
   return tokenData;
