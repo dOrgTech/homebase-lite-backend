@@ -114,11 +114,12 @@ const getUserTotalVotingPowerAtReferenceBlock = async (
       method: "GET",
     });
     console.log("responseIsDelegating.data: ", responseIsDelegating.data);
-    if (
-      responseIsDelegating.status !== 200 ||
-      responseIsDelegating.data.length !== 0
-    ) {
+    if (responseIsDelegating.status !== 200) {
       throw new Error("User Delegating to someone else");
+    }
+
+    if (responseIsDelegating.data.length !== 0) {
+      return BigNumber(0);
     }
 
     const url = `https://api.${network}.tzkt.io/v1/contracts/${address}/bigmaps/delegates/historical_keys/${level}?value.eq=${userAddress}&active=true`;
@@ -186,7 +187,7 @@ const getUserTotalVotingPowerAtReferenceBlock = async (
     }
   } catch (error) {
     console.log("error: ", error);
-    throw error;
+    throw new Error("User Delegating to someone else");
   }
 };
 
