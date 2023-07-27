@@ -5,7 +5,9 @@ const dbo = require("../../db/conn");
 const {
   getInputFromSigPayload,
   getUserTotalSupplyAtReferenceBlock,
+  getUserTotalVotingPowerAtReferenceBlock,
 } = require("../../utils");
+const { default: BigNumber } = require("bignumber.js");
 
 // This help convert the id from string to ObjectId for the _id.
 const ObjectId = require("mongodb").ObjectId;
@@ -61,28 +63,29 @@ const updateChoiceById = async (req, response) => {
 
     const block = poll.referenceBlock;
 
-
     values.forEach(async (value) => {
-
       const { address, choiceId } = value;
 
-      const total = await getUserTotalSupplyAtReferenceBlock(
+      const total = await getUserTotalVotingPowerAtReferenceBlock(
         dao.network,
         dao.tokenAddress,
+        dao.daoContract,
         token.tokenID,
         block,
         address
       );
+      console.log("total: ", total);
 
-      if (total === 0) {
+      if (total.eq(0)) {
         throw "No balance at proposal level";
       }
 
       let walletVote = {
         address,
-        balanceAtReferenceBlock: total,
+        balanceAtReferenceBlock: total.toString(),
         choiceId,
       };
+      console.log("walletVote: ", walletVote);
 
       const choice = await db_connect
         .collection("Choices")
@@ -95,7 +98,9 @@ const updateChoiceById = async (req, response) => {
           walletAddresses: { $elemMatch: { address: address } },
         })
         .toArray();
+      console.log("isVoted.length: ", isVoted.length);
       if (isVoted.length > 0) {
+        console.log("poll.votingStrategy: ", poll.votingStrategy);
         if (poll.votingStrategy === 0) {
           const mongoClient = dbo.getClient();
           const session = mongoClient.startSession();
@@ -105,10 +110,11 @@ const updateChoiceById = async (req, response) => {
               walletAddresses: walletVote,
             },
           };
+          console.log("newData: ", newData);
           const oldVote = await db_connect
             .collection("Choices")
             .findOne({ _id: ObjectId(isVoted[0].walletAddresses[0].choiceId) });
-
+          console.log("oldVote: ", oldVote);
 
           let remove = {
             $pull: {
@@ -130,7 +136,9 @@ const updateChoiceById = async (req, response) => {
                   { session }
                 );
 
-                await coll1.updateOne({ _id: ObjectId(choice._id) }, newData, { session });
+                await coll1.updateOne({ _id: ObjectId(choice._id) }, newData, {
+                  session,
+                });
               })
               .then((res) => response.json(res));
           } catch (e) {
@@ -141,13 +149,12 @@ const updateChoiceById = async (req, response) => {
             await session.endSession();
           }
         } else {
-
           const mongoClient = dbo.getClient();
           const session = mongoClient.startSession();
 
-          const distributedWeight = total / values.length;
+          const distributedWeight = total.div(new BigNumber(values.length));
 
-          walletVote.balanceAtReferenceBlock = distributedWeight;
+          walletVote.balanceAtReferenceBlock = distributedWeight.toString();
 
           let remove = {
             $pull: {
@@ -159,8 +166,7 @@ const updateChoiceById = async (req, response) => {
             // FIRST REMOVE OLD ADDRESS VOTES
             await db_connect
               .collection("Choices")
-              .updateMany({}, remove,
-                { remove: true },)
+              .updateMany({}, remove, { remove: true });
 
             await session
               .withTransaction(async () => {
@@ -175,18 +181,13 @@ const updateChoiceById = async (req, response) => {
                   { upsert: true }
                 );
 
-                
-                i++
-
+                i++;
               })
               .then((res) => {
                 if (i === values.length) {
-                  response.json(res)
+                  response.json(res);
                 }
-              }
-              );
-
-
+              });
           } catch (e) {
             result = e.Message;
             console.warn(result);
@@ -199,8 +200,8 @@ const updateChoiceById = async (req, response) => {
         let newId = { _id: ObjectId(choice._id) };
 
         if (values.length > 1) {
-          const distributedWeight = total / values.length;
-          walletVote.balanceAtReferenceBlock = distributedWeight
+          const distributedWeight = total.div(new BigNumber(values.length));
+          walletVote.balanceAtReferenceBlock = distributedWeight.toString();
         }
         let data = {
           $push: {
@@ -216,11 +217,10 @@ const updateChoiceById = async (req, response) => {
         if (j === values.length) {
           response.json(res);
         } else {
-          return
+          return;
         }
       }
-
-    })
+    });
   } catch (error) {
     console.log("error: ", error);
     response.status(400).send({
@@ -306,19 +306,13 @@ const getPollVotes = async (req, response) => {
   try {
     const choices = [];
     let db_connect = dbo.getDb("Lite");
-    const cursor = await db_connect
-      .collection("Choices")
-      .find(
-        {
-          pollID: ObjectId(id)
-        }
-
-      );
+    const cursor = await db_connect.collection("Choices").find({
+      pollID: ObjectId(id),
+    });
 
     await cursor.forEach((elem) => choices.push(elem));
-    choices.forEach(choice => total += choice.walletAddresses.length)
+    choices.forEach((choice) => (total += choice.walletAddresses.length));
     return response.json(total);
-
   } catch (error) {
     console.log("error: ", error);
     response.status(400).send({
@@ -327,11 +321,10 @@ const getPollVotes = async (req, response) => {
   }
 };
 
-
 module.exports = {
   getChoiceById,
   updateChoiceById,
   choicesByUser,
   addChoice,
-  getPollVotes
+  getPollVotes,
 };
