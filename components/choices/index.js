@@ -89,6 +89,7 @@ const updateChoiceById = async (req, response) => {
           balanceAtReferenceBlock: total.toString(),
           choiceId,
         };
+        console.log("walletVote: ", walletVote);
 
         const choice = await db_connect
           .collection("Choices")
@@ -101,6 +102,7 @@ const updateChoiceById = async (req, response) => {
             walletAddresses: { $elemMatch: { address: address } },
           })
           .toArray();
+        console.log("isVoted: ", isVoted);
         if (isVoted.length > 0) {
           if (poll.votingStrategy === 0) {
             const mongoClient = dbo.getClient();
@@ -111,17 +113,21 @@ const updateChoiceById = async (req, response) => {
                 walletAddresses: walletVote,
               },
             };
+            console.log("newData: ", newData);
             const oldVote = await db_connect.collection("Choices").findOne({
               _id: ObjectId(isVoted[0].walletAddresses[0].choiceId),
             });
+            console.log("oldVote: ", oldVote);
 
             let remove = {
               $pull: {
                 walletAddresses: {
-                  address: oldVote.walletAddresses[0].address,
+                  address,
                 },
               },
             };
+            console.log("remove: ", remove);
+
             try {
               await session
                 .withTransaction(async () => {
