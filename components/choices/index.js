@@ -64,161 +64,170 @@ const updateChoiceById = async (req, response) => {
     const block = poll.referenceBlock;
 
     values.forEach(async (value) => {
-      const { address, choiceId } = value;
+      try {
+        const { address, choiceId } = value;
 
-      const total = await getUserTotalVotingPowerAtReferenceBlock(
-        dao.network,
-        dao.tokenAddress,
-        dao.daoContract,
-        token.tokenID,
-        block,
-        address
-      );
-      console.log("total: ", total);
+        const total = await getUserTotalVotingPowerAtReferenceBlock(
+          dao.network,
+          dao.tokenAddress,
+          dao.daoContract,
+          token.tokenID,
+          block,
+          address
+        );
 
-      if (total.eq(0)) {
-        throw "No balance at proposal level";
-      }
+        if (!total) {
+          throw "Could not get total power at reference block";
+        }
 
-      let walletVote = {
-        address,
-        balanceAtReferenceBlock: total.toString(),
-        choiceId,
-      };
-      console.log("walletVote: ", walletVote);
+        if (total.eq(0)) {
+          throw "No balance at proposal level";
+        }
 
-      const choice = await db_connect
-        .collection("Choices")
-        .findOne({ _id: ObjectId(choiceId) });
+        let walletVote = {
+          address,
+          balanceAtReferenceBlock: total.toString(),
+          choiceId,
+        };
 
-      const isVoted = await db_connect
-        .collection("Choices")
-        .find({
-          pollID: poll._id,
-          walletAddresses: { $elemMatch: { address: address } },
-        })
-        .toArray();
-      console.log("isVoted.length: ", isVoted.length);
-      if (isVoted.length > 0) {
-        console.log("poll.votingStrategy: ", poll.votingStrategy);
-        if (poll.votingStrategy === 0) {
-          const mongoClient = dbo.getClient();
-          const session = mongoClient.startSession();
+        const choice = await db_connect
+          .collection("Choices")
+          .findOne({ _id: ObjectId(choiceId) });
 
-          let newData = {
+        const isVoted = await db_connect
+          .collection("Choices")
+          .find({
+            pollID: poll._id,
+            walletAddresses: { $elemMatch: { address: address } },
+          })
+          .toArray();
+        if (isVoted.length > 0) {
+          if (poll.votingStrategy === 0) {
+            const mongoClient = dbo.getClient();
+            const session = mongoClient.startSession();
+
+            let newData = {
+              $push: {
+                walletAddresses: walletVote,
+              },
+            };
+            const oldVote = await db_connect.collection("Choices").findOne({
+              _id: ObjectId(isVoted[0].walletAddresses[0].choiceId),
+            });
+
+            let remove = {
+              $pull: {
+                walletAddresses: {
+                  address: oldVote.walletAddresses[0].address,
+                },
+              },
+            };
+            try {
+              await session
+                .withTransaction(async () => {
+                  const coll1 = db_connect.collection("Choices");
+                  const coll2 = db_connect.collection("Polls");
+
+                  // await coll2.updateOne({_id: poll._id},  { $set: { "votes" : values.length }})
+                  // Important:: You must pass the session to the operations
+                  await coll1.updateOne(
+                    { _id: ObjectId(oldVote._id) },
+                    remove,
+                    { remove: true },
+                    { session }
+                  );
+
+                  await coll1.updateOne(
+                    { _id: ObjectId(choice._id) },
+                    newData,
+                    {
+                      session,
+                    }
+                  );
+                })
+                .then((res) => response.json(res));
+            } catch (e) {
+              result = e.Message;
+              console.warn("result", e);
+              await session.abortTransaction();
+            } finally {
+              await session.endSession();
+            }
+          } else {
+            const mongoClient = dbo.getClient();
+            const session = mongoClient.startSession();
+
+            const distributedWeight = total.div(new BigNumber(values.length));
+
+            walletVote.balanceAtReferenceBlock = distributedWeight.toString();
+
+            let remove = {
+              $pull: {
+                walletAddresses: { address: address },
+              },
+            };
+
+            try {
+              // FIRST REMOVE OLD ADDRESS VOTES
+              // Fix All polls votes removed
+              await db_connect
+                .collection("Choices")
+                .updateMany({}, remove, { remove: true });
+
+              await session
+                .withTransaction(async () => {
+                  const coll1 = db_connect.collection("Choices");
+                  const coll2 = db_connect.collection("Polls");
+
+                  await coll1.updateOne(
+                    {
+                      _id: choice._id,
+                    },
+                    { $push: { walletAddresses: walletVote } },
+                    { upsert: true }
+                  );
+
+                  i++;
+                })
+                .then((res) => {
+                  if (i === values.length) {
+                    response.json(res);
+                  }
+                });
+            } catch (e) {
+              result = e.Message;
+              console.warn(result);
+              await session.abortTransaction();
+            } finally {
+              await session.endSession();
+            }
+          }
+        } else {
+          let newId = { _id: ObjectId(choice._id) };
+
+          if (values.length > 1) {
+            const distributedWeight = total.div(new BigNumber(values.length));
+            walletVote.balanceAtReferenceBlock = distributedWeight.toString();
+          }
+          let data = {
             $push: {
               walletAddresses: walletVote,
             },
           };
-          console.log("newData: ", newData);
-          const oldVote = await db_connect
+          const res = await db_connect
             .collection("Choices")
-            .findOne({ _id: ObjectId(isVoted[0].walletAddresses[0].choiceId) });
-          console.log("oldVote: ", oldVote);
+            .updateOne(newId, data, { upsert: true });
 
-          let remove = {
-            $pull: {
-              walletAddresses: { address: oldVote.walletAddresses[0].address },
-            },
-          };
-          try {
-            await session
-              .withTransaction(async () => {
-                const coll1 = db_connect.collection("Choices");
-                const coll2 = db_connect.collection("Polls");
+          j++;
 
-                // await coll2.updateOne({_id: poll._id},  { $set: { "votes" : values.length }})
-                // Important:: You must pass the session to the operations
-                await coll1.updateOne(
-                  { _id: ObjectId(oldVote._id) },
-                  remove,
-                  { remove: true },
-                  { session }
-                );
-
-                await coll1.updateOne({ _id: ObjectId(choice._id) }, newData, {
-                  session,
-                });
-              })
-              .then((res) => response.json(res));
-          } catch (e) {
-            result = e.Message;
-            console.warn("result", e);
-            await session.abortTransaction();
-          } finally {
-            await session.endSession();
-          }
-        } else {
-          const mongoClient = dbo.getClient();
-          const session = mongoClient.startSession();
-
-          const distributedWeight = total.div(new BigNumber(values.length));
-
-          walletVote.balanceAtReferenceBlock = distributedWeight.toString();
-
-          let remove = {
-            $pull: {
-              walletAddresses: { address: address },
-            },
-          };
-
-          try {
-            // FIRST REMOVE OLD ADDRESS VOTES
-            await db_connect
-              .collection("Choices")
-              .updateMany({}, remove, { remove: true });
-
-            await session
-              .withTransaction(async () => {
-                const coll1 = db_connect.collection("Choices");
-                const coll2 = db_connect.collection("Polls");
-
-                await coll1.updateOne(
-                  {
-                    _id: choice._id,
-                  },
-                  { $push: { walletAddresses: walletVote } },
-                  { upsert: true }
-                );
-
-                i++;
-              })
-              .then((res) => {
-                if (i === values.length) {
-                  response.json(res);
-                }
-              });
-          } catch (e) {
-            result = e.Message;
-            console.warn(result);
-            await session.abortTransaction();
-          } finally {
-            await session.endSession();
+          if (j === values.length) {
+            response.json(res);
+          } else {
+            return;
           }
         }
-      } else {
-        let newId = { _id: ObjectId(choice._id) };
-
-        if (values.length > 1) {
-          const distributedWeight = total.div(new BigNumber(values.length));
-          walletVote.balanceAtReferenceBlock = distributedWeight.toString();
-        }
-        let data = {
-          $push: {
-            walletAddresses: walletVote,
-          },
-        };
-        const res = await db_connect
-          .collection("Choices")
-          .updateOne(newId, data, { upsert: true });
-
-        j++;
-
-        if (j === values.length) {
-          response.json(res);
-        } else {
-          return;
-        }
+      } catch (error) {
+        console.log("error: ", error);
       }
     });
   } catch (error) {

@@ -99,21 +99,13 @@ const getUserTotalVotingPowerAtReferenceBlock = async (
   userAddress
 ) => {
   try {
-    const userDAODepositBalance = await getUserDAODepositBalanceAtLevel(
-      userAddress,
-      network,
-      daoContract,
-      level
-    );
-    console.log("userDAODepositBalance: ", userDAODepositBalance);
+    let userVotingPower = new BigNumber(0);
 
     const urlIsDelegating = `https://api.${network}.tzkt.io/v1/contracts/${address}/bigmaps/delegates/historical_keys/${level}?key.eq=${userAddress}&value.ne=${userAddress}&active=true`;
-    console.log("urlIsDelegating: ", urlIsDelegating);
     const responseIsDelegating = await axios({
       url: urlIsDelegating,
       method: "GET",
     });
-    console.log("responseIsDelegating.data: ", responseIsDelegating.data);
     if (responseIsDelegating.status !== 200) {
       throw new Error("User Delegating to someone else");
     }
@@ -122,10 +114,24 @@ const getUserTotalVotingPowerAtReferenceBlock = async (
       return BigNumber(0);
     }
 
+    const selfBalance = await getUserTotalSupplyAtReferenceBlock(
+      network,
+      address,
+      tokenID,
+      level,
+      userAddress
+    );
+
+    const userDAODepositBalance = await getUserDAODepositBalanceAtLevel(
+      userAddress,
+      network,
+      daoContract,
+      level
+    );
+
+    let totalVoteWeight = new BigNumber(0);
     const url = `https://api.${network}.tzkt.io/v1/contracts/${address}/bigmaps/delegates/historical_keys/${level}?value.eq=${userAddress}&active=true`;
-    console.log("url: ", url);
     const response = await axios({ url, method: "GET" });
-    console.log("response: ", response.status);
 
     if (response.status !== 200) {
       throw new Error("Failed to fetch token delegations from TZKT API");
@@ -138,6 +144,9 @@ const getUserTotalVotingPowerAtReferenceBlock = async (
 
       await Promise.all(
         resultingDelegations.map(async (del) => {
+          if (del.key === del.value) {
+            return;
+          }
           const balance = await getUserTotalSupplyAtReferenceBlock(
             network,
             address,
@@ -145,46 +154,47 @@ const getUserTotalVotingPowerAtReferenceBlock = async (
             level,
             del.key
           );
+          const userDAODepositBalance = await getUserDAODepositBalanceAtLevel(
+            del.key,
+            network,
+            daoContract,
+            level
+          );
           if (balance) {
+            const userTotalBalance = new BigNumber(0);
+
+            if (balance) {
+              userTotalBalance = userTotalBalance.plus(balance);
+            }
+            if (userDAODepositBalance) {
+              userTotalBalance = userTotalBalance.plus(userDAODepositBalance);
+            }
+
             delegatedAddressBalances.push({
               address: del.key,
-              balance: balance,
+              balance: userTotalBalance.toString(),
             });
           }
         })
       );
-      console.log("delegatedAddressBalances: ", delegatedAddressBalances);
-
-      let totalVoteWeight = new BigNumber(0);
 
       delegatedAddressBalances.forEach((delegatedVote) => {
         const balance = new BigNumber(delegatedVote.balance);
         totalVoteWeight = totalVoteWeight.plus(balance);
       });
-
-      return totalVoteWeight.plus(
-        new BigNumber(userDAODepositBalance ? userDAODepositBalance : 0)
-      );
-    } else {
-      const selfBalance = await getUserTotalSupplyAtReferenceBlock(
-        network,
-        address,
-        tokenID,
-        level,
-        userAddress
-      );
-      console.log("selfBalance: ", selfBalance);
-
-      if (!selfBalance) {
-        throw new Error(
-          "Could not fetch delegate token balance from the TZKT API"
-        );
-      }
-
-      return new BigNumber(selfBalance).plus(
-        new BigNumber(userDAODepositBalance ? userDAODepositBalance : 0)
-      );
     }
+
+    if (selfBalance) {
+      userVotingPower = userVotingPower.plus(selfBalance);
+    }
+    if (totalVoteWeight) {
+      userVotingPower = userVotingPower.plus(totalVoteWeight);
+    }
+    if (userDAODepositBalance) {
+      userVotingPower = userVotingPower.plus(userDAODepositBalance);
+    }
+
+    return userVotingPower;
   } catch (error) {
     console.log("error: ", error);
     throw new Error("User Delegating to someone else");
