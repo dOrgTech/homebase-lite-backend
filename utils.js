@@ -161,7 +161,7 @@ const getUserTotalVotingPowerAtReferenceBlock = async (
             level
           );
           if (balance) {
-            const userTotalBalance = new BigNumber(0);
+            let userTotalBalance = new BigNumber(0);
 
             if (balance) {
               userTotalBalance = userTotalBalance.plus(balance);
