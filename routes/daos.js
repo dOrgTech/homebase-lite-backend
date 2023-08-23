@@ -8,6 +8,8 @@ const {
   getDAOById,
   createDAO,
   joinDAO,
+  updateTotalHolders,
+  updateTotalCount
 } = require("../components/daos");
 
 // recordRoutes is an instance of the express router.
@@ -23,5 +25,10 @@ daoRoutes.route("/daos").post(getAllLiteOnlyDAOs);
 daoRoutes.route("/daos/contracts/:daoContract").post(getDAOFromContractAddress);
 // This section will help you get a single record by id
 daoRoutes.route("/daos/:id").get(getDAOById);
+// This section adds a new field to DAO Collection
+daoRoutes.route("/daos/create/voting").get(updateTotalHolders);
+// This section updates total voting addresses count 
+daoRoutes.route("/daos/count/:id").post(updateTotalCount);
+
 
 module.exports = daoRoutes;
