@@ -173,6 +173,7 @@ const createDAO = async (req, response) => {
     _id: original_id,
     network: values.network,
     daoContract: values?.daoContract,
+    votingAddressesCount: values.votingAddressesCount
   };
 
   try {
