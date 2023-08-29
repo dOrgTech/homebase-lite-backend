@@ -4,6 +4,7 @@ const { getTokenMetadata } = require("../../services");
 const { getInputFromSigPayload } = require("../../utils");
 
 const dbo = require("../../db/conn");
+const { response } = require("express");
 
 const getAllLiteOnlyDAOs = async (req, response) => {
   const { network } = req.body;
@@ -94,6 +95,50 @@ const getDAOById = async (req, response) => {
   }
 };
 
+const updateTotalCount = async (req, response) => {
+  const { id } = req.params;
+  const { count } = req.body;
+  try {
+    let db_connect = dbo.getDb();
+    let data = {
+      $set: {
+        votingAddressesCount: count,
+      },
+    };
+    let communityId = { _id: ObjectId(id) };
+    const res = await db_connect
+    .collection("DAOs")
+    .updateOne(communityId, data, { upsert: true });
+
+    response.json(res);
+  } catch (error) {
+    console.log("error: ", error);
+    response.status(500).send({
+      message: "Community votingAddressesCount could not be updated  ",
+    });
+  }
+}
+
+const updateTotalHolders = async (req, response) => {
+  try {
+    let db_connect = dbo.getDb();
+    const DAOCollection = db_connect.collection("DAOs");
+
+    const result = await DAOCollection.find({}).forEach(function (item) {
+      DAOCollection.updateOne(
+        { _id: ObjectId(item._id) },
+        { $set: { 'votingAddressesCount': item.members ? item.members.length: 0 } }
+      )
+    })
+    response.json(result)
+  } catch (error) {
+    console.log("error: ", error);
+    response.status(400).send({
+      message: "Error adding new field to collection",
+    });
+  }
+}
+
 const createDAO = async (req, response) => {
   const { payloadBytes } = req.body;
 
@@ -128,6 +173,7 @@ const createDAO = async (req, response) => {
     _id: original_id,
     network: values.network,
     daoContract: values?.daoContract,
+    votingAddressesCount: values.votingAddressesCount
   };
 
   try {
@@ -207,4 +253,6 @@ module.exports = {
   getDAOById,
   createDAO,
   joinDAO,
+  updateTotalHolders,
+  updateTotalCount
 };
