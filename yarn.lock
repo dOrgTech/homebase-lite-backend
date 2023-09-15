@@ -18,7 +18,7 @@
     "@stablelib/hash" "^1.0.1"
     "@stablelib/wipe" "^1.0.1"
 
-"@stablelib/ed25519@^1.0.2":
+"@stablelib/ed25519@^1.0.2", "@stablelib/ed25519@^1.0.3":
   "integrity" "sha512-puIMWaX9QlRsbhxfDc5i+mNPMY+0TmQEskunY1rZEBPi1acBCVQAhnsk/1Hk50DGPtVsZtAWQg4NHGlVaO9Hqg=="
   "resolved" "https://registry.npmjs.org/@stablelib/ed25519/-/ed25519-1.0.3.tgz"
   "version" "1.0.3"
@@ -59,6 +59,70 @@
   "resolved" "https://registry.npmjs.org/@stablelib/wipe/-/wipe-1.0.1.tgz"
   "version" "1.0.1"
 
+"@taquito/core@^17.3.0":
+  "integrity" "sha512-worh4CMAue4GqLZeJOB1PwIHZ+LH+RmHxfRuSD/c0VoAbuJUVkdRu+uLgGyx+hdIKUeyAxe2g41c50VSMYF3Zw=="
+  "resolved" "https://registry.npmjs.org/@taquito/core/-/core-17.3.0.tgz"
+  "version" "17.3.0"
+
+"@taquito/http-utils@^17.3.0":
+  "integrity" "sha512-jUclvXppsIExn93PSrEsW5IkrsP11V9D5DWfqFne5uwt5GAaJBlaSYBJKo4vyfE9EGmZ+MQWs0X/MbTT625FgA=="
+  "resolved" "https://registry.npmjs.org/@taquito/http-utils/-/http-utils-17.3.0.tgz"
+  "version" "17.3.0"
+  dependencies:
+    "@taquito/core" "^17.3.0"
+    "axios" "0.26.0"
+
+"@taquito/local-forging@^17.3.0":
+  "integrity" "sha512-Y/4Yl2RBvE7UhgZ1GNj6LlJFgfqtgtNNbZ9zJEqbUBuxpwC/i0ZP5UlOwInbwFS9081vrWgLkj3JNyvC7KP2Kg=="
+  "resolved" "https://registry.npmjs.org/@taquito/local-forging/-/local-forging-17.3.0.tgz"
+  "version" "17.3.0"
+  dependencies:
+    "@taquito/core" "^17.3.0"
+    "@taquito/utils" "^17.3.0"
+    "bignumber.js" "^9.1.0"
+
+"@taquito/michel-codec@^17.3.0":
+  "integrity" "sha512-svct6iY1VnwFUlJaj6LX6kcuTqQ0nCiZ+DcTmsZAG6HcCP3gcEPxf02pbZl2zyqJbNpeKt4Q9EDaxBapBW2G5Q=="
+  "resolved" "https://registry.npmjs.org/@taquito/michel-codec/-/michel-codec-17.3.0.tgz"
+  "version" "17.3.0"
+  dependencies:
+    "@taquito/core" "^17.3.0"
+
+"@taquito/michelson-encoder@^17.3.0":
+  "integrity" "sha512-XFvAGdnwpH0TF8liNiuE5COdvBFh5VmyN8WullRvwxlUcxLvQYS+MAfJjbk7WuSv4k31gQPc9r7O3G4m0AbPlA=="
+  "resolved" "https://registry.npmjs.org/@taquito/michelson-encoder/-/michelson-encoder-17.3.0.tgz"
+  "version" "17.3.0"
+  dependencies:
+    "@taquito/rpc" "^17.3.0"
+    "@taquito/utils" "^17.3.0"
+    "bignumber.js" "^9.1.0"
+    "fast-json-stable-stringify" "^2.1.0"
+
+"@taquito/rpc@^17.3.0":
+  "integrity" "sha512-xZkTS3BhAe/9Bo8Q7o5LLsMYkv5R+g33gp2Fm/drmpyFmepk1QCj94fEvIUSb/7CcOJxr3dnPXTPh1hpi8zp+w=="
+  "resolved" "https://registry.npmjs.org/@taquito/rpc/-/rpc-17.3.0.tgz"
+  "version" "17.3.0"
+  dependencies:
+    "@taquito/core" "^17.3.0"
+    "@taquito/http-utils" "^17.3.0"
+    "@taquito/utils" "^17.3.0"
+    "bignumber.js" "^9.1.0"
+
+"@taquito/taquito@^17.3.0":
+  "integrity" "sha512-AODy23a398LWx2k7gIFxHrJHe8BzLsvxCBR9eTIOH1qhhCiKf9oEEJR6Ymj9rAXnp3RoZRt/orQ7ylqB0NrXnA=="
+  "resolved" "https://registry.npmjs.org/@taquito/taquito/-/taquito-17.3.0.tgz"
+  "version" "17.3.0"
+  dependencies:
+    "@taquito/core" "^17.3.0"
+    "@taquito/http-utils" "^17.3.0"
+    "@taquito/local-forging" "^17.3.0"
+    "@taquito/michel-codec" "^17.3.0"
+    "@taquito/michelson-encoder" "^17.3.0"
+    "@taquito/rpc" "^17.3.0"
+    "@taquito/utils" "^17.3.0"
+    "bignumber.js" "^9.1.0"
+    "rxjs" "^7.8.1"
+
 "@taquito/utils@^14.0.0":
   "integrity" "sha512-0RSHn/CzbcbMdldJJIlXyxOvAajwmL6iPKJ6NaRyYJqqLM2CxYjG72KpXVv716pCMV1MbIWsOAr9FKbxW73PsA=="
   "resolved" "https://registry.npmjs.org/@taquito/utils/-/utils-14.0.0.tgz"
@@ -68,6 +132,22 @@
     "@stablelib/ed25519" "^1.0.2"
     "@types/bs58check" "^2.1.0"
     "bignumber.js" "^9.0.2"
+    "blakejs" "^1.2.1"
+    "bs58check" "^2.1.2"
+    "buffer" "^6.0.3"
+    "elliptic" "^6.5.4"
+    "typedarray-to-buffer" "^4.0.0"
+
+"@taquito/utils@^17.3.0":
+  "integrity" "sha512-e1MdHDdDcK473bdi/zLtBV91b/7SUx/j0kwKXgPt04hbKX+/Nu1mJSviExFE/GXgxFvB6iufDui45Ui8jcYKtg=="
+  "resolved" "https://registry.npmjs.org/@taquito/utils/-/utils-17.3.0.tgz"
+  "version" "17.3.0"
+  dependencies:
+    "@stablelib/blake2b" "^1.0.1"
+    "@stablelib/ed25519" "^1.0.3"
+    "@taquito/core" "^17.3.0"
+    "@types/bs58check" "^2.1.0"
+    "bignumber.js" "^9.1.0"
     "blakejs" "^1.2.1"
     "bs58check" "^2.1.2"
     "buffer" "^6.0.3"
@@ -126,6 +206,13 @@
     "form-data" "^4.0.0"
     "proxy-from-env" "^1.1.0"
 
+"axios@0.26.0":
+  "integrity" "sha512-lKoGLMYtHvFrPVt3r+RBMp9nh34N0M8zEfCWqdWZx6phynIEhQqAdydpyBAAG211zlhX9Rgu08cOamy6XjE5Og=="
+  "resolved" "https://registry.npmjs.org/axios/-/axios-0.26.0.tgz"
+  "version" "0.26.0"
+  dependencies:
+    "follow-redirects" "^1.14.8"
+
 "base-x@^3.0.2":
   "integrity" "sha512-H7JU6iBHTal1gp56aKoaa//YUxEaAOUiydvrV/pILqIHXTtqxSkATOnDA2u+jZ/61sD+L/412+7kzXRtWukhpQ=="
   "resolved" "https://registry.npmjs.org/base-x/-/base-x-3.0.9.tgz"
@@ -138,7 +225,7 @@
   "resolved" "https://registry.npmjs.org/base64-js/-/base64-js-1.5.1.tgz"
   "version" "1.5.1"
 
-"bignumber.js@^9.0.2", "bignumber.js@^9.1.1":
+"bignumber.js@^9.0.2", "bignumber.js@^9.1.0", "bignumber.js@^9.1.1":
   "integrity" "sha512-pHm4LsMJ6lzgNGVfZHjMoO8sdoRhOzOH4MLmY65Jg70bpxCKu5iOHNJyfF6OyvYw7t8Fpf35RuzUyqnQsj8Vig=="
   "resolved" "https://registry.npmjs.org/bignumber.js/-/bignumber.js-9.1.1.tgz"
   "version" "9.1.1"
@@ -386,6 +473,11 @@
     "utils-merge" "1.0.1"
     "vary" "~1.1.2"
 
+"fast-json-stable-stringify@^2.1.0":
+  "integrity" "sha512-lhd/wF+Lk98HZoTCtlVraHtfh5XYijIjalXck7saUtuanSDyLMxnHhSXEDJqHxD7msR8D0uCmqlkwjCV8xvwHw=="
+  "resolved" "https://registry.npmjs.org/fast-json-stable-stringify/-/fast-json-stable-stringify-2.1.0.tgz"
+  "version" "2.1.0"
+
 "finalhandler@1.2.0":
   "integrity" "sha512-5uXcUVftlQMFnWC9qu/svkWv3GTd2PfUhK/3PLkYNAe7FbqJMt3515HaxE6eRL74GdsriiwujiawdaB1BpEISg=="
   "resolved" "https://registry.npmjs.org/finalhandler/-/finalhandler-1.2.0.tgz"
@@ -399,7 +491,7 @@
     "statuses" "2.0.1"
     "unpipe" "~1.0.0"
 
-"follow-redirects@^1.15.0":
+"follow-redirects@^1.14.8", "follow-redirects@^1.15.0":
   "integrity" "sha512-VQLG33o04KaQ8uYi2tVNbdrWp1QWxNNea+nmIB4EVM28v0hmP17z7aG1+wAkNzVq4KeXTq3221ye5qTJP91JwA=="
   "resolved" "https://registry.npmjs.org/follow-redirects/-/follow-redirects-1.15.2.tgz"
   "version" "1.15.2"
@@ -688,6 +780,13 @@
     "hash-base" "^3.0.0"
     "inherits" "^2.0.1"
 
+"rxjs@^7.8.1":
+  "integrity" "sha512-AA3TVj+0A2iuIoQkWEK/tqFjBq2j+6PO6Y0zJcvzLAFhEFIO3HL0vls9hWLncZbAAbK0mar7oZ4V079I/qPMxg=="
+  "resolved" "https://registry.npmjs.org/rxjs/-/rxjs-7.8.1.tgz"
+  "version" "7.8.1"
+  dependencies:
+    "tslib" "^2.1.0"
+
 "safe-buffer@^5.0.1", "safe-buffer@^5.1.2", "safe-buffer@^5.2.0", "safe-buffer@~5.2.0", "safe-buffer@5.2.1":
   "integrity" "sha512-rp3So07KcdmmKbGvgaNxQSJr7bGVSVk5S9Eq1F+ppbRo70+YeaDxkw5Dd8NPN+GD6bjnYm2VuPuCXmpuYvmCXQ=="
   "resolved" "https://registry.npmjs.org/safe-buffer/-/safe-buffer-5.2.1.tgz"
@@ -799,6 +898,11 @@
   "version" "3.0.0"
   dependencies:
     "punycode" "^2.1.1"
+
+"tslib@^2.1.0":
+  "integrity" "sha512-AEYxH93jGFPn/a2iVAwW87VuUIkR1FVUKB77NwMF7nBTDkDrrT/Hpt/IrCJ0QXhW27jTBDcf5ZY7w6RiqTMw2Q=="
+  "resolved" "https://registry.npmjs.org/tslib/-/tslib-2.6.2.tgz"
+  "version" "2.6.2"
 
 "type-is@~1.6.18":
   "integrity" "sha512-TkRKr9sUTxEH8MdfuCSP7VizJyzRNMjj2J2do2Jr3Kym598JVdEksuzPQCnlFPW4ky9Q+iA+ma9BGm06XQBy8g=="

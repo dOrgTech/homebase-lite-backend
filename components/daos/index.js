@@ -37,7 +37,7 @@ const getAllLiteOnlyDAOs = async (req, response) => {
   } catch (error) {
     console.log("error: ", error);
     response.status(400).send({
-      message: "Error retrieving the list of communities ",
+      message: error.message,
     });
   }
 };
@@ -72,7 +72,7 @@ const getDAOFromContractAddress = async (req, response) => {
   } catch (error) {
     console.log("error: ", error);
     response.status(400).send({
-      message: "Error retrieving the community for that DAO ",
+      message: error.message,
     });
   }
 };
@@ -90,7 +90,7 @@ const getDAOById = async (req, response) => {
   } catch (error) {
     console.log("error: ", error);
     response.status(400).send({
-      message: "Community not found ",
+      message: error.message,
     });
   }
 };
@@ -107,8 +107,8 @@ const updateTotalCount = async (req, response) => {
     };
     let communityId = { _id: ObjectId(id) };
     const res = await db_connect
-    .collection("DAOs")
-    .updateOne(communityId, data, { upsert: true });
+      .collection("DAOs")
+      .updateOne(communityId, data, { upsert: true });
 
     response.json(res);
   } catch (error) {
@@ -117,7 +117,7 @@ const updateTotalCount = async (req, response) => {
       message: "Community votingAddressesCount could not be updated  ",
     });
   }
-}
+};
 
 const updateTotalHolders = async (req, response) => {
   try {
@@ -127,82 +127,93 @@ const updateTotalHolders = async (req, response) => {
     const result = await DAOCollection.find({}).forEach(function (item) {
       DAOCollection.updateOne(
         { _id: ObjectId(item._id) },
-        { $set: { 'votingAddressesCount': item.members ? item.members.length: 0 } }
-      )
-    })
-    response.json(result)
+        {
+          $set: {
+            votingAddressesCount: item.members ? item.members.length : 0,
+          },
+        }
+      );
+    });
+    response.json(result);
   } catch (error) {
     console.log("error: ", error);
     response.status(400).send({
-      message: "Error adding new field to collection",
+      message: error.message,
     });
   }
-}
+};
 
 const createDAO = async (req, response) => {
   const { payloadBytes } = req.body;
 
-  const values = getInputFromSigPayload(payloadBytes);
-  let db_connect = dbo.getDb();
-
-  const mongoClient = dbo.getClient();
-  const session = mongoClient.startSession();
-
-  const original_id = ObjectId();
-
-  const tokenAddress = values.tokenAddress;
-  const tokenID = values.tokenID;
-
-  const tokenData = await getTokenMetadata(
-    tokenAddress,
-    values.network,
-    tokenID
-  );
-
-  let DAOData = {
-    name: values.name,
-    description: values.description,
-    linkToTerms: values.linkToTerms,
-    picUri: values.picUri,
-    members: values.members,
-    polls: values.polls,
-    tokenAddress: values.tokenAddress,
-    tokenType: tokenData.standard,
-    requiredTokenOwnership: values.requiredTokenOwnership,
-    allowPublicAccess: values.allowPublicAccess,
-    _id: original_id,
-    network: values.network,
-    daoContract: values?.daoContract,
-    votingAddressesCount: values.votingAddressesCount
-  };
-
   try {
-    await session
-      .withTransaction(async () => {
-        const DAOCollection = db_connect.collection("DAOs");
-        const TokenCollection = db_connect.collection("Tokens");
-        // Important:: You must pass the session to the operations
-        await DAOCollection.insertOne(DAOData, { session });
+    const values = getInputFromSigPayload(payloadBytes);
+    let db_connect = dbo.getDb();
 
-        await TokenCollection.insertOne(
-          {
-            tokenAddress,
-            tokenType: tokenData.standard,
-            symbol: tokenData.metadata.symbol,
-            tokenID: Number(tokenID),
-            daoID: original_id,
-            decimals: Number(tokenData.metadata.decimals),
-          },
-          { session }
-        );
-      })
-      .then((res) => response.json(res));
-  } catch (e) {
-    result = e.Message;
-    console.warn(result);
-    await session.abortTransaction();
-  } finally {
-    await session.endSession();
+    const mongoClient = dbo.getClient();
+    const session = mongoClient.startSession();
+
+    const original_id = ObjectId();
+
+    const tokenAddress = values.tokenAddress;
+    const tokenID = values.tokenID;
+
+    const tokenData = await getTokenMetadata(
+      tokenAddress,
+      values.network,
+      tokenID
+    );
+
+    let DAOData = {
+      name: values.name,
+      description: values.description,
+      linkToTerms: values.linkToTerms,
+      picUri: values.picUri,
+      members: values.members,
+      polls: values.polls,
+      tokenAddress: values.tokenAddress,
+      tokenType: tokenData.standard,
+      requiredTokenOwnership: values.requiredTokenOwnership,
+      allowPublicAccess: values.allowPublicAccess,
+      _id: original_id,
+      network: values.network,
+      daoContract: values?.daoContract,
+      votingAddressesCount: values.votingAddressesCount,
+    };
+
+    try {
+      await session
+        .withTransaction(async () => {
+          const DAOCollection = db_connect.collection("DAOs");
+          const TokenCollection = db_connect.collection("Tokens");
+          // Important:: You must pass the session to the operations
+          await DAOCollection.insertOne(DAOData, { session });
+
+          await TokenCollection.insertOne(
+            {
+              tokenAddress,
+              tokenType: tokenData.standard,
+              symbol: tokenData.metadata.symbol,
+              tokenID: Number(tokenID),
+              daoID: original_id,
+              decimals: Number(tokenData.metadata.decimals),
+            },
+            { session }
+          );
+        })
+        .then((res) => response.json(res));
+    } catch (e) {
+      result = e.Message;
+      console.log(e);
+      await session.abortTransaction();
+    } finally {
+      await session.endSession();
+    }
+  } catch (error) {
+    console.log("error: ", error);
+    response.status(400).send({
+      message: error.message,
+    });
   }
 };
 
@@ -242,7 +253,7 @@ const joinDAO = async (req, response) => {
   } catch (error) {
     console.log("error: ", error);
     response.status(400).send({
-      message: "Could not join community",
+      message: error.message,
     });
   }
 };
@@ -254,5 +265,5 @@ module.exports = {
   createDAO,
   joinDAO,
   updateTotalHolders,
-  updateTotalCount
+  updateTotalCount,
 };

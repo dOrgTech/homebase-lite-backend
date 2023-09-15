@@ -1,6 +1,8 @@
+const { TezosToolkit } = require("@taquito/taquito");
 const { bytes2Char } = require("@taquito/utils");
 const axios = require("axios");
 const { default: BigNumber } = require("bignumber.js");
+const { rpcNodes } = require("./services");
 
 const getInputFromSigPayload = (payloadBytes) => {
   const parsedPayloadBytesString = bytes2Char(payloadBytes);
@@ -37,7 +39,27 @@ const getCurrentBlock = async (network) => {
   }
 };
 
-const getUserTotalSupplyAtReferenceBlock = async (
+const getUserTotalVotingWeightAtBlock = async (
+  network,
+  address,
+  level,
+  userAddress
+) => {
+  const tezos = new TezosToolkit(rpcNodes[network]);
+  const token = await tezos.wallet.at(address);
+
+  let userVotingPower = new BigNumber(0);
+
+  userVotingPower = await token.contractViews
+    .voting_power({ addr: userAddress, block_level: level })
+    .executeView({
+      viewCaller: userAddress,
+    });
+
+  return userVotingPower;
+};
+
+const getUserBalanceAtLevel = async (
   network,
   address,
   tokenID,
@@ -49,13 +71,13 @@ const getUserTotalSupplyAtReferenceBlock = async (
   if (response.status === 200) {
     const result = response.data;
     if (result.length > 0) {
-      return result[0].balance;
+      return new BigNumber(result[0].balance);
     } else {
-      return 0;
+      return new BigNumber(0);
     }
   }
 
-  return 0;
+  return new BigNumber(0);
 };
 
 const getUserDAODepositBalanceAtLevel = async (
@@ -65,15 +87,13 @@ const getUserDAODepositBalanceAtLevel = async (
   level
 ) => {
   const url = `https://api.${network}.tzkt.io/v1/contracts/${daoAddress}/bigmaps/freeze_history/historical_keys/${level}?key.eq=${accountAddress}`;
-
   const response = await axios({ url, method: "GET" });
-
   if (response.status !== 200) {
     throw new Error("Failed to fetch user dao balance");
   }
-
   const userStakedBalances = response.data;
 
+  let userDAODepositBalance = new BigNumber(0);
   if (userStakedBalances && userStakedBalances[0]) {
     const userStakedBalance = new BigNumber(userStakedBalances[0].value.staked);
     const userCurrentUnstakedBalance = new BigNumber(
@@ -83,11 +103,12 @@ const getUserDAODepositBalanceAtLevel = async (
       userStakedBalances[0].value.past_unstaked
     );
 
-    const userDAODepositBalance = userStakedBalance
+    userDAODepositBalance = userStakedBalance
       .plus(userCurrentUnstakedBalance)
       .plus(userPastUnstakedBalance);
-    return userDAODepositBalance.toString();
   }
+
+  return userDAODepositBalance;
 };
 
 const getUserTotalVotingPowerAtReferenceBlock = async (
@@ -98,113 +119,163 @@ const getUserTotalVotingPowerAtReferenceBlock = async (
   level,
   userAddress
 ) => {
+  console.log("qweqweqweqweqwqweqw", {
+    network,
+    address,
+    daoContract,
+    tokenID,
+    level,
+    userAddress,
+  });
   try {
     let userVotingPower = new BigNumber(0);
 
-    const urlIsDelegating = `https://api.${network}.tzkt.io/v1/contracts/${address}/bigmaps/delegates/historical_keys/${level}?key.eq=${userAddress}&value.ne=${userAddress}&active=true`;
-    const responseIsDelegating = await axios({
-      url: urlIsDelegating,
-      method: "GET",
-    });
-    if (responseIsDelegating.status !== 200) {
-      throw new Error("User Delegating to someone else");
-    }
-
-    if (responseIsDelegating.data.length !== 0) {
-      return BigNumber(0);
-    }
-
-    const selfBalance = await getUserTotalSupplyAtReferenceBlock(
+    const isTokenDelegation = await isTokenDelegationSupported(
       network,
-      address,
-      tokenID,
-      level,
-      userAddress
+      address
     );
 
-    const userDAODepositBalance = await getUserDAODepositBalanceAtLevel(
-      userAddress,
-      network,
-      daoContract,
-      level
-    );
+    if (isTokenDelegation) {
+      const selfBalance = await getUserTotalVotingWeightAtBlock(
+        network,
+        address,
+        level,
+        userAddress
+      );
+      console.log("selfBalance: ", selfBalance.toString());
+      if (!selfBalance) {
+        throw new Error("Could Not get voting weight");
+      }
 
-    let totalVoteWeight = new BigNumber(0);
-    const url = `https://api.${network}.tzkt.io/v1/contracts/${address}/bigmaps/delegates/historical_keys/${level}?value.eq=${userAddress}&active=true`;
-    const response = await axios({ url, method: "GET" });
+      userVotingPower = userVotingPower.plus(selfBalance);
 
-    if (response.status !== 200) {
-      throw new Error("Failed to fetch token delegations from TZKT API");
-    }
+      const responseIsDelegating = await axios({
+        url: `https://api.${network}.tzkt.io/v1/contracts/${address}/bigmaps/delegates/historical_keys/${level}?key.eq=${userAddress}&value.ne=${userAddress}&active=true`,
+        method: "GET",
+      });
+      if (responseIsDelegating.status !== 200) {
+        throw new Error("Failed to fetch token delegations from TZKT API");
+      }
+      // if (responseIsDelegating.data.length !== 0) {
+      //   userVotingPower = BigNumber(0);
+      //   return userVotingPower;
+      // }
 
-    if (response.data.length > 0) {
-      const resultingDelegations = response.data;
+      const response = await axios({
+        url: `https://api.${network}.tzkt.io/v1/contracts/${address}/bigmaps/delegates/historical_keys/${level}?value.eq=${userAddress}&active=true`,
+        method: "GET",
+      });
+      if (response.status !== 200) {
+        throw new Error("Failed to fetch token delegations from TZKT API");
+      }
 
-      const delegatedAddressBalances = [];
+      let totalVoteWeight = new BigNumber(0);
+      if (response.data.length > 0) {
+        const resultingDelegations = response.data;
 
-      await Promise.all(
-        resultingDelegations.map(async (del) => {
-          if (del.key === del.value) {
-            return;
-          }
-          const balance = await getUserTotalSupplyAtReferenceBlock(
-            network,
-            address,
-            tokenID,
-            level,
-            del.key
-          );
-          const userDAODepositBalance = await getUserDAODepositBalanceAtLevel(
-            del.key,
-            network,
-            daoContract,
-            level
-          );
-          if (balance) {
-            let userTotalBalance = new BigNumber(0);
+        const delegatedAddressBalances = [];
 
-            if (balance) {
-              userTotalBalance = userTotalBalance.plus(balance);
+        await Promise.all(
+          resultingDelegations.map(async (del) => {
+            if (del.key === del.value) {
+              return;
             }
-            if (userDAODepositBalance) {
-              userTotalBalance = userTotalBalance.plus(userDAODepositBalance);
+            let userVotingWeight = new BigNumber(0);
+
+            // const balance = await getUserTotalVotingWeightAtBlock(
+            //   network,
+            //   address,
+            //   level,
+            //   del.key
+            // );
+            // userVotingWeight = userVotingWeight.plus(balance);
+
+            if (daoContract) {
+              const delegateUserDAODepositBalance =
+                await getUserDAODepositBalanceAtLevel(
+                  del.key,
+                  network,
+                  daoContract,
+                  level
+                );
+              console.log(
+                "delegateUserDAODepositBalanceeee: ",
+                delegateUserDAODepositBalance
+              );
+              userVotingWeight = userVotingWeight.plus(
+                delegateUserDAODepositBalance
+              );
             }
 
             delegatedAddressBalances.push({
               address: del.key,
-              balance: userTotalBalance.toString(),
+              balance: userVotingWeight,
             });
-          }
-        })
+          })
+        );
+
+        delegatedAddressBalances.forEach((delegatedVote) => {
+          const balance = new BigNumber(delegatedVote.balance);
+          console.log("balancasdfe: ", balance.toString());
+          totalVoteWeight = totalVoteWeight.plus(balance);
+        });
+      }
+
+      userVotingPower = userVotingPower.plus(totalVoteWeight);
+    } else {
+      const selfBalance = await getUserBalanceAtLevel(
+        network,
+        address,
+        tokenID,
+        level,
+        userAddress
       );
-
-      delegatedAddressBalances.forEach((delegatedVote) => {
-        const balance = new BigNumber(delegatedVote.balance);
-        totalVoteWeight = totalVoteWeight.plus(balance);
-      });
-    }
-
-    if (selfBalance) {
       userVotingPower = userVotingPower.plus(selfBalance);
     }
-    if (totalVoteWeight) {
-      userVotingPower = userVotingPower.plus(totalVoteWeight);
-    }
-    if (userDAODepositBalance) {
+
+    console.log("daoContract: ", daoContract);
+    console.log("level: ", level);
+    if (daoContract) {
+      console.log("daoContract: ", daoContract);
+      const userDAODepositBalance = await getUserDAODepositBalanceAtLevel(
+        userAddress,
+        network,
+        daoContract,
+        level
+      );
+      console.log("userVotingPower: ", userVotingPower.toString());
       userVotingPower = userVotingPower.plus(userDAODepositBalance);
+      console.log("userDAODepositBalance: ", userDAODepositBalance.toString());
     }
 
     return userVotingPower;
   } catch (error) {
     console.log("error: ", error);
-    throw new Error("User Delegating to someone else");
+    throw error;
   }
+};
+
+const isTokenDelegationSupported = async (network, address) => {
+  const tezos = new TezosToolkit(rpcNodes[network]);
+  const token = await tezos.wallet.at(address);
+
+  const contractViews = Object.keys(token.contractViews);
+  const votingPowerView = contractViews.filter(
+    (view) => view === "voting_power"
+  );
+
+  if (votingPowerView) {
+    return true;
+  }
+
+  return false;
 };
 
 module.exports = {
   getInputFromSigPayload,
   getTotalSupplyAtCurrentBlock,
   getCurrentBlock,
-  getUserTotalSupplyAtReferenceBlock,
+  getUserTotalVotingWeightAtBlock,
   getUserTotalVotingPowerAtReferenceBlock,
+  getUserBalanceAtLevel,
 };

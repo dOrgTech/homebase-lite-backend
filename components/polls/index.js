@@ -4,6 +4,7 @@ const {
   getInputFromSigPayload,
   getCurrentBlock,
   getTotalSupplyAtCurrentBlock,
+  getUserBalanceAtLevel,
 } = require("../../utils");
 
 const ObjectId = require("mongodb").ObjectId;
@@ -20,7 +21,7 @@ const getPollById = async (req, response) => {
   } catch (error) {
     console.log("error: ", error);
     response.status(400).send({
-      message: "Error retrieving poll",
+      message: error.message,
     });
   }
 };
@@ -41,7 +42,7 @@ const getPollsById = async (req, response) => {
   } catch (error) {
     console.log("error: ", error);
     response.status(400).send({
-      message: "Error retrieving the list of polls",
+      message: error.message,
     });
   }
 };
@@ -83,9 +84,22 @@ const addPoll = async (req, response) => {
     const total = await getTotalSupplyAtCurrentBlock(
       dao.network,
       dao.tokenAddress,
-      token.tokenID,
-      block
+      token.tokenID
     );
+
+    const authorBalanceAtCurrentLevel = await getUserBalanceAtLevel(
+      dao.network,
+      dao.tokenAddress,
+      token.tokenID,
+      block,
+      values.author
+    );
+
+    if (authorBalanceAtCurrentLevel.eq(0) && dao.requiredTokenOwnership) {
+      throw new Error(
+        "User Doesnt have balance at this level to create proposal"
+      );
+    }
 
     if (!total) {
       await session.abortTransaction();
@@ -138,7 +152,7 @@ const addPoll = async (req, response) => {
   } catch (error) {
     console.log("error: ", error);
     response.status(400).send({
-      message: "Could not create new poll",
+      message: error.message,
     });
   }
 };
