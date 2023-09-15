@@ -193,22 +193,22 @@ const getUserTotalVotingPowerAtReferenceBlock = async (
             // );
             // userVotingWeight = userVotingWeight.plus(balance);
 
-            if (daoContract) {
-              const delegateUserDAODepositBalance =
-                await getUserDAODepositBalanceAtLevel(
-                  del.key,
-                  network,
-                  daoContract,
-                  level
-                );
-              console.log(
-                "delegateUserDAODepositBalanceeee: ",
-                delegateUserDAODepositBalance
-              );
-              userVotingWeight = userVotingWeight.plus(
-                delegateUserDAODepositBalance
-              );
-            }
+            // if (daoContract) {
+            //   const delegateUserDAODepositBalance =
+            //     await getUserDAODepositBalanceAtLevel(
+            //       del.key,
+            //       network,
+            //       daoContract,
+            //       level
+            //     );
+            //   console.log(
+            //     "delegateUserDAODepositBalanceeee: ",
+            //     delegateUserDAODepositBalance
+            //   );
+            //   userVotingWeight = userVotingWeight.plus(
+            //     delegateUserDAODepositBalance
+            //   );
+            // }
 
             delegatedAddressBalances.push({
               address: del.key,
@@ -234,21 +234,22 @@ const getUserTotalVotingPowerAtReferenceBlock = async (
         userAddress
       );
       userVotingPower = userVotingPower.plus(selfBalance);
-    }
 
-    console.log("daoContract: ", daoContract);
-    console.log("level: ", level);
-    if (daoContract) {
-      console.log("daoContract: ", daoContract);
-      const userDAODepositBalance = await getUserDAODepositBalanceAtLevel(
-        userAddress,
-        network,
-        daoContract,
-        level
-      );
-      console.log("userVotingPower: ", userVotingPower.toString());
-      userVotingPower = userVotingPower.plus(userDAODepositBalance);
-      console.log("userDAODepositBalance: ", userDAODepositBalance.toString());
+      if (daoContract) {
+        console.log("daoContract: ", daoContract);
+        const userDAODepositBalance = await getUserDAODepositBalanceAtLevel(
+          userAddress,
+          network,
+          daoContract,
+          level
+        );
+        console.log("userVotingPower: ", userVotingPower.toString());
+        userVotingPower = userVotingPower.plus(userDAODepositBalance);
+        console.log(
+          "userDAODepositBalance: ",
+          userDAODepositBalance.toString()
+        );
+      }
     }
 
     return userVotingPower;
