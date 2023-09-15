@@ -136,18 +136,18 @@ const getUserTotalVotingPowerAtReferenceBlock = async (
     );
 
     if (isTokenDelegation) {
-      const selfBalance = await getUserTotalVotingWeightAtBlock(
+      const userVotePower = await getUserTotalVotingWeightAtBlock(
         network,
         address,
         level,
         userAddress
       );
-      console.log("selfBalance: ", selfBalance.toString());
-      if (!selfBalance) {
+      console.log("userVotePower: ", userVotePower.toString());
+      if (!userVotePower) {
         throw new Error("Could Not get voting weight");
       }
 
-      userVotingPower = userVotingPower.plus(selfBalance);
+      userVotingPower = userVotingPower.plus(userVotePower);
 
       const responseIsDelegating = await axios({
         url: `https://api.${network}.tzkt.io/v1/contracts/${address}/bigmaps/delegates/historical_keys/${level}?key.eq=${userAddress}&value.ne=${userAddress}&active=true`,
@@ -156,10 +156,13 @@ const getUserTotalVotingPowerAtReferenceBlock = async (
       if (responseIsDelegating.status !== 200) {
         throw new Error("Failed to fetch token delegations from TZKT API");
       }
-      // if (responseIsDelegating.data.length !== 0) {
-      //   userVotingPower = BigNumber(0);
-      //   return userVotingPower;
-      // }
+      if (
+        responseIsDelegating.data.length !== 0 &&
+        userVotePower.eq(new BigNumber(0))
+      ) {
+        userVotingPower = BigNumber(0);
+        return userVotingPower;
+      }
 
       const response = await axios({
         url: `https://api.${network}.tzkt.io/v1/contracts/${address}/bigmaps/delegates/historical_keys/${level}?value.eq=${userAddress}&active=true`,
