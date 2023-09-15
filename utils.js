@@ -146,85 +146,7 @@ const getUserTotalVotingPowerAtReferenceBlock = async (
       if (!userVotePower) {
         throw new Error("Could Not get voting weight");
       }
-
       userVotingPower = userVotingPower.plus(userVotePower);
-
-      const responseIsDelegating = await axios({
-        url: `https://api.${network}.tzkt.io/v1/contracts/${address}/bigmaps/delegates/historical_keys/${level}?key.eq=${userAddress}&value.ne=${userAddress}&active=true`,
-        method: "GET",
-      });
-      if (responseIsDelegating.status !== 200) {
-        throw new Error("Failed to fetch token delegations from TZKT API");
-      }
-      if (
-        responseIsDelegating.data.length !== 0 &&
-        userVotePower.eq(new BigNumber(0))
-      ) {
-        userVotingPower = BigNumber(0);
-        return userVotingPower;
-      }
-
-      const response = await axios({
-        url: `https://api.${network}.tzkt.io/v1/contracts/${address}/bigmaps/delegates/historical_keys/${level}?value.eq=${userAddress}&active=true`,
-        method: "GET",
-      });
-      if (response.status !== 200) {
-        throw new Error("Failed to fetch token delegations from TZKT API");
-      }
-
-      let totalVoteWeight = new BigNumber(0);
-      if (response.data.length > 0) {
-        const resultingDelegations = response.data;
-
-        const delegatedAddressBalances = [];
-
-        await Promise.all(
-          resultingDelegations.map(async (del) => {
-            if (del.key === del.value) {
-              return;
-            }
-            let userVotingWeight = new BigNumber(0);
-
-            // const balance = await getUserTotalVotingWeightAtBlock(
-            //   network,
-            //   address,
-            //   level,
-            //   del.key
-            // );
-            // userVotingWeight = userVotingWeight.plus(balance);
-
-            // if (daoContract) {
-            //   const delegateUserDAODepositBalance =
-            //     await getUserDAODepositBalanceAtLevel(
-            //       del.key,
-            //       network,
-            //       daoContract,
-            //       level
-            //     );
-            //   console.log(
-            //     "delegateUserDAODepositBalanceeee: ",
-            //     delegateUserDAODepositBalance
-            //   );
-            //   userVotingWeight = userVotingWeight.plus(
-            //     delegateUserDAODepositBalance
-            //   );
-            // }
-
-            delegatedAddressBalances.push({
-              address: del.key,
-              balance: userVotingWeight,
-            });
-          })
-        );
-
-        delegatedAddressBalances.forEach((delegatedVote) => {
-          const balance = new BigNumber(delegatedVote.balance);
-          console.log("balancasdfe: ", balance.toString());
-          totalVoteWeight = totalVoteWeight.plus(balance);
-        });
-      }
-
-      userVotingPower = userVotingPower.plus(totalVoteWeight);
     } else {
       const selfBalance = await getUserBalanceAtLevel(
         network,
@@ -243,7 +165,6 @@ const getUserTotalVotingPowerAtReferenceBlock = async (
           daoContract,
           level
         );
-        console.log("userVotingPower: ", userVotingPower.toString());
         userVotingPower = userVotingPower.plus(userDAODepositBalance);
         console.log(
           "userDAODepositBalance: ",
@@ -251,6 +172,7 @@ const getUserTotalVotingPowerAtReferenceBlock = async (
         );
       }
     }
+    console.log("userVotingPower: ", userVotingPower.toString());
 
     return userVotingPower;
   } catch (error) {
