@@ -62,10 +62,8 @@ const updateChoiceById = async (req, response) => {
 
     const block = poll.referenceBlock;
 
-    for (var key in values) {
-      const value = values[key];
+    values.forEach(async (value) => {
       const { address, choiceId } = value;
-      console.log("value: ", value);
 
       const total = await getUserTotalVotingPowerAtReferenceBlock(
         dao.network,
@@ -229,7 +227,7 @@ const updateChoiceById = async (req, response) => {
           return;
         }
       }
-    }
+    });
   } catch (error) {
     console.log("erroasasar: ", error.message);
     response.status(400).send({
