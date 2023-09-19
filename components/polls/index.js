@@ -5,6 +5,7 @@ const {
   getCurrentBlock,
   getTotalSupplyAtCurrentBlock,
   getUserBalanceAtLevel,
+  getUserTotalVotingPowerAtReferenceBlock,
 } = require("../../utils");
 
 const ObjectId = require("mongodb").ObjectId;
@@ -93,15 +94,17 @@ const addPoll = async (req, response) => {
       token.tokenID
     );
 
-    const authorBalanceAtCurrentLevel = await getUserBalanceAtLevel(
-      dao.network,
-      dao.tokenAddress,
-      token.tokenID,
-      block,
-      values.author
-    );
+    const userVotingPowerAtCurrentLevel =
+      await getUserTotalVotingPowerAtReferenceBlock(
+        dao.network,
+        dao.tokenAddress,
+        dao.daoContract,
+        token.tokenID,
+        block,
+        values.author
+      );
 
-    if (authorBalanceAtCurrentLevel.eq(0) && dao.requiredTokenOwnership) {
+    if (userVotingPowerAtCurrentLevel.eq(0) && dao.requiredTokenOwnership) {
       throw new Error(
         "User Doesnt have balance at this level to create proposal"
       );
