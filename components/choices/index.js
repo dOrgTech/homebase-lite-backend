@@ -40,11 +40,14 @@ const updateChoiceById = async (req, response) => {
 
   try {
     const values = getInputFromSigPayload(payloadBytes);
+    console.log("values: ", values);
     let db_connect = dbo.getDb("Lite");
+
+    const pollID = values[0].pollID;
 
     const poll = await db_connect
       .collection("Polls")
-      .findOne({ _id: ObjectId(values[0].pollID) });
+      .findOne({ _id: ObjectId(pollID) });
 
     const timeNow = Number(new Date());
 
@@ -62,72 +65,84 @@ const updateChoiceById = async (req, response) => {
 
     const block = poll.referenceBlock;
 
-    values.forEach(async (value) => {
-      const { address, choiceId } = value;
+    const address = values[0].address;
 
-      const total = await getUserTotalVotingPowerAtReferenceBlock(
-        dao.network,
-        dao.tokenAddress,
-        dao.daoContract,
-        token.tokenID,
-        block,
-        address
-      );
-
-      if (!total) {
-        throw new Error("Could not get total power at reference block");
+    // Validate values
+    values.forEach((value) => {
+      if (value.address !== address) {
+        throw new Error("Invalid Proposal Body, Invalid Address in choices");
       }
-
-      if (total.eq(0)) {
-        throw new Error("No balance at proposal level");
+      if (value.pollID !== pollID) {
+        throw new Error("Invalid Proposal Body, Invalid Poll ID in choices");
       }
+    });
 
-      let walletVote = {
-        address,
-        balanceAtReferenceBlock: total.toString(),
-        choiceId,
-      };
+    const total = await getUserTotalVotingPowerAtReferenceBlock(
+      dao.network,
+      dao.tokenAddress,
+      dao.daoContract,
+      token.tokenID,
+      block,
+      address
+    );
 
-      const choice = await db_connect
-        .collection("Choices")
-        .findOne({ _id: ObjectId(choiceId) });
+    if (!total) {
+      throw new Error("Could not get total power at reference block");
+    }
 
-      const isVoted = await db_connect
-        .collection("Choices")
-        .find({
-          pollID: poll._id,
-          walletAddresses: { $elemMatch: { address: address } },
-        })
-        .toArray();
-      console.log("isVoted: ", isVoted);
-      if (isVoted.length > 0) {
-        if (poll.votingStrategy === 0) {
-          const mongoClient = dbo.getClient();
-          const session = mongoClient.startSession();
+    if (total.eq(0)) {
+      throw new Error("No balance at proposal level");
+    }
 
-          let newData = {
-            $push: {
-              walletAddresses: walletVote,
-            },
-          };
-          console.log("newData: ", newData);
-          const oldVote = await db_connect.collection("Choices").findOne({
-            _id: ObjectId(isVoted[0].walletAddresses[0].choiceId),
-          });
-          console.log("oldVote: ", oldVote);
+    await Promise.all(
+      values.map(async (value) => {
+        const { address, choiceId } = value;
 
-          let remove = {
-            $pull: {
-              walletAddresses: {
-                address,
+        let walletVote = {
+          address,
+          balanceAtReferenceBlock: total.toString(),
+          choiceId,
+        };
+
+        const choice = await db_connect
+          .collection("Choices")
+          .findOne({ _id: ObjectId(choiceId) });
+
+        const isVoted = await db_connect
+          .collection("Choices")
+          .find({
+            pollID: poll._id,
+            walletAddresses: { $elemMatch: { address: address } },
+          })
+          .toArray();
+        console.log("isVoted: ", isVoted);
+        if (isVoted.length > 0) {
+          if (poll.votingStrategy === 0) {
+            const mongoClient = dbo.getClient();
+            const session = mongoClient.startSession();
+
+            let newData = {
+              $push: {
+                walletAddresses: walletVote,
               },
-            },
-          };
-          console.log("remove: ", remove);
+            };
+            console.log("newData: ", newData);
+            const oldVote = await db_connect.collection("Choices").findOne({
+              _id: ObjectId(isVoted[0].walletAddresses[0].choiceId),
+            });
+            console.log("oldVote: ", oldVote);
 
-          try {
-            await session
-              .withTransaction(async () => {
+            let remove = {
+              $pull: {
+                walletAddresses: {
+                  address,
+                },
+              },
+            };
+            console.log("remove: ", remove);
+
+            try {
+              await session.withTransaction(async () => {
                 const coll1 = db_connect.collection("Choices");
                 const coll2 = db_connect.collection("Polls");
 
@@ -143,93 +158,99 @@ const updateChoiceById = async (req, response) => {
                 await coll1.updateOne({ _id: ObjectId(choice._id) }, newData, {
                   session,
                 });
-              })
-              .then((res) => response.json(res));
-          } catch (e) {
-            result = e.Message;
-            console.log(e);
-            await session.abortTransaction();
-            throw new Error(e);
-          } finally {
-            await session.endSession();
+              });
+              // .then((res) => response.json({ success: true }));
+            } catch (e) {
+              result = e.Message;
+              console.log(e);
+              await session.abortTransaction();
+              throw new Error(e);
+            } finally {
+              await session.endSession();
+            }
+          } else {
+            const mongoClient = dbo.getClient();
+            const session = mongoClient.startSession();
+
+            const distributedWeight = total.div(new BigNumber(values.length));
+
+            walletVote.balanceAtReferenceBlock = distributedWeight.toString();
+
+            let remove = {
+              $pull: {
+                walletAddresses: { address: address },
+              },
+            };
+
+            try {
+              console.log("poll._id: ", poll._id);
+              // FIRST REMOVE OLD ADDRESS VOTES
+              // Fix All polls votes removed
+              await db_connect
+                .collection("Choices")
+                .updateMany({ pollID: poll._id }, remove, { remove: true });
+
+              await session
+                .withTransaction(async () => {
+                  const coll1 = db_connect.collection("Choices");
+                  const coll2 = db_connect.collection("Polls");
+
+                  await coll1.updateOne(
+                    {
+                      _id: choice._id,
+                    },
+                    { $push: { walletAddresses: walletVote } },
+                    { upsert: true }
+                  );
+
+                  i++;
+                })
+                .then((res) => {
+                  console.log("res: ", res);
+                  if (i === values.length) {
+                    console.log("i === values.length: ", i === values.length);
+                    // response.json({ success: true });
+                  }
+                });
+            } catch (e) {
+              result = e.Message;
+              console.log(e);
+              await session.abortTransaction();
+              throw new Error(e);
+            } finally {
+              await session.endSession();
+            }
           }
         } else {
-          const mongoClient = dbo.getClient();
-          const session = mongoClient.startSession();
+          let newId = { _id: ObjectId(choice._id) };
 
-          const distributedWeight = total.div(new BigNumber(values.length));
-
-          walletVote.balanceAtReferenceBlock = distributedWeight.toString();
-
-          let remove = {
-            $pull: {
-              walletAddresses: { address: address },
+          if (values.length > 1) {
+            const distributedWeight = total.div(new BigNumber(values.length));
+            walletVote.balanceAtReferenceBlock = distributedWeight.toString();
+          }
+          let data = {
+            $push: {
+              walletAddresses: walletVote,
             },
           };
+          const res = await db_connect
+            .collection("Choices")
+            .updateOne(newId, data, { upsert: true });
 
-          try {
-            // FIRST REMOVE OLD ADDRESS VOTES
-            // Fix All polls votes removed
-            await db_connect
-              .collection("Choices")
-              .updateMany({}, remove, { remove: true });
+          j++;
 
-            await session
-              .withTransaction(async () => {
-                const coll1 = db_connect.collection("Choices");
-                const coll2 = db_connect.collection("Polls");
-
-                await coll1.updateOne(
-                  {
-                    _id: choice._id,
-                  },
-                  { $push: { walletAddresses: walletVote } },
-                  { upsert: true }
-                );
-
-                i++;
-              })
-              .then((res) => {
-                if (i === values.length) {
-                  response.json(res);
-                }
-              });
-          } catch (e) {
-            result = e.Message;
-            console.log(e);
-            await session.abortTransaction();
-            throw new Error(e);
-          } finally {
-            await session.endSession();
+          if (j === values.length) {
+            // response.json({ success: true });
+          } else {
+            return;
           }
         }
-      } else {
-        let newId = { _id: ObjectId(choice._id) };
+      })
+    );
 
-        if (values.length > 1) {
-          const distributedWeight = total.div(new BigNumber(values.length));
-          walletVote.balanceAtReferenceBlock = distributedWeight.toString();
-        }
-        let data = {
-          $push: {
-            walletAddresses: walletVote,
-          },
-        };
-        const res = await db_connect
-          .collection("Choices")
-          .updateOne(newId, data, { upsert: true });
-
-        j++;
-
-        if (j === values.length) {
-          response.json(res);
-        } else {
-          return;
-        }
-      }
-    });
+    response.json({ success: true });
   } catch (error) {
-    console.log("erroasasar: ", error.message);
+    console.log("error: ", error.message);
     response.status(400).send({
       message: error.message,
     });
