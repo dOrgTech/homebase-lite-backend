@@ -119,14 +119,6 @@ const getUserTotalVotingPowerAtReferenceBlock = async (
   level,
   userAddress
 ) => {
-  console.log("qweqweqweqweqwqweqw", {
-    network,
-    address,
-    daoContract,
-    tokenID,
-    level,
-    userAddress,
-  });
   try {
     let userVotingPower = new BigNumber(0);
 
@@ -134,7 +126,6 @@ const getUserTotalVotingPowerAtReferenceBlock = async (
       network,
       address
     );
-    console.log("isTokenDelegation: ", isTokenDelegation);
 
     if (isTokenDelegation) {
       const userVotePower = await getUserTotalVotingWeightAtBlock(
@@ -143,7 +134,6 @@ const getUserTotalVotingPowerAtReferenceBlock = async (
         level,
         userAddress
       );
-      console.log("userVotePower: ", userVotePower.toString());
       if (!userVotePower) {
         throw new Error("Could Not get voting weight");
       }
@@ -159,7 +149,6 @@ const getUserTotalVotingPowerAtReferenceBlock = async (
       userVotingPower = userVotingPower.plus(selfBalance);
 
       if (daoContract) {
-        console.log("daoContract: ", daoContract);
         const userDAODepositBalance = await getUserDAODepositBalanceAtLevel(
           userAddress,
           network,
@@ -167,13 +156,8 @@ const getUserTotalVotingPowerAtReferenceBlock = async (
           level
         );
         userVotingPower = userVotingPower.plus(userDAODepositBalance);
-        console.log(
-          "userDAODepositBalance: ",
-          userDAODepositBalance.toString()
-        );
       }
     }
-    console.log("userVotingPower: ", userVotingPower.toString());
 
     return userVotingPower;
   } catch (error) {

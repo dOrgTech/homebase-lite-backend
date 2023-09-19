@@ -40,7 +40,6 @@ const updateChoiceById = async (req, response) => {
 
   try {
     const values = getInputFromSigPayload(payloadBytes);
-    console.log("values: ", values);
     let db_connect = dbo.getDb("Lite");
 
     const pollID = values[0].pollID;
@@ -115,7 +114,6 @@ const updateChoiceById = async (req, response) => {
             walletAddresses: { $elemMatch: { address: address } },
           })
           .toArray();
-        console.log("isVoted: ", isVoted);
         if (isVoted.length > 0) {
           if (poll.votingStrategy === 0) {
             const mongoClient = dbo.getClient();
@@ -126,11 +124,9 @@ const updateChoiceById = async (req, response) => {
                 walletAddresses: walletVote,
               },
             };
-            console.log("newData: ", newData);
             const oldVote = await db_connect.collection("Choices").findOne({
               _id: ObjectId(isVoted[0].walletAddresses[0].choiceId),
             });
-            console.log("oldVote: ", oldVote);
 
             let remove = {
               $pull: {
@@ -139,7 +135,6 @@ const updateChoiceById = async (req, response) => {
                 },
               },
             };
-            console.log("remove: ", remove);
 
             try {
               await session.withTransaction(async () => {
@@ -183,7 +178,6 @@ const updateChoiceById = async (req, response) => {
             };
 
             try {
-              console.log("poll._id: ", poll._id);
               // FIRST REMOVE OLD ADDRESS VOTES
               // Fix All polls votes removed
               await db_connect
@@ -206,9 +200,7 @@ const updateChoiceById = async (req, response) => {
                   i++;
                 })
                 .then((res) => {
-                  console.log("res: ", res);
                   if (i === values.length) {
-                    console.log("i === values.length: ", i === values.length);
                     // response.json({ success: true });
                   }
                 });
