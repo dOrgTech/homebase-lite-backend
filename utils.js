@@ -134,6 +134,7 @@ const getUserTotalVotingPowerAtReferenceBlock = async (
       network,
       address
     );
+    console.log("isTokenDelegation: ", isTokenDelegation);
 
     if (isTokenDelegation) {
       const userVotePower = await getUserTotalVotingWeightAtBlock(
@@ -186,9 +187,7 @@ const isTokenDelegationSupported = async (network, address) => {
   const token = await tezos.wallet.at(address);
 
   const contractViews = Object.keys(token.contractViews);
-  const votingPowerView = contractViews.filter(
-    (view) => view === "voting_power"
-  );
+  const votingPowerView = contractViews.find((view) => view === "voting_power");
 
   if (votingPowerView) {
     return true;
