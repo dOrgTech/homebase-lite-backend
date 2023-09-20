@@ -11,8 +11,10 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@taquito/taquito": "^17.3.0",
     "@taquito/utils": "^14.0.0",
     "axios": "^1.1.3",
+    "bignumber.js": "^9.1.1",
     "cors": "^2.8.5",
     "dotenv": "^16.0.3",
     "express": "^4.18.1",

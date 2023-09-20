@@ -5,6 +5,11 @@ const networkNameMap = {
   ghostnet: "ghostnet",
 };
 
+const rpcNodes = {
+  mainnet: "https://mainnet.api.tez.ie",
+  ghostnet: "https://ghostnet.tezos.marigold.dev",
+};
+
 const getTokenMetadata = async (contractAddress, network, tokenId) => {
   const url = `https://api.${networkNameMap[network]}.tzkt.io/v1/tokens?contract=${contractAddress}&tokenId=${tokenId}`;
 
@@ -22,4 +27,5 @@ const getTokenMetadata = async (contractAddress, network, tokenId) => {
 
 module.exports = {
   getTokenMetadata,
+  rpcNodes,
 };

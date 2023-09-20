@@ -1,5 +1,8 @@
+const { TezosToolkit } = require("@taquito/taquito");
 const { bytes2Char } = require("@taquito/utils");
 const axios = require("axios");
+const { default: BigNumber } = require("bignumber.js");
+const { rpcNodes } = require("./services");
 
 const getInputFromSigPayload = (payloadBytes) => {
   const parsedPayloadBytesString = bytes2Char(payloadBytes);
@@ -36,7 +39,27 @@ const getCurrentBlock = async (network) => {
   }
 };
 
-const getUserTotalSupplyAtReferenceBlock = async (
+const getUserTotalVotingWeightAtBlock = async (
+  network,
+  address,
+  level,
+  userAddress
+) => {
+  const tezos = new TezosToolkit(rpcNodes[network]);
+  const token = await tezos.wallet.at(address);
+
+  let userVotingPower = new BigNumber(0);
+
+  userVotingPower = await token.contractViews
+    .voting_power({ addr: userAddress, block_level: level })
+    .executeView({
+      viewCaller: userAddress,
+    });
+
+  return userVotingPower;
+};
+
+const getUserBalanceAtLevel = async (
   network,
   address,
   tokenID,
@@ -48,18 +71,120 @@ const getUserTotalSupplyAtReferenceBlock = async (
   if (response.status === 200) {
     const result = response.data;
     if (result.length > 0) {
-      return result[0].balance;
+      return new BigNumber(result[0].balance);
     } else {
-      return 0;
+      return new BigNumber(0);
     }
   }
 
-  return 0;
+  return new BigNumber(0);
+};
+
+const getUserDAODepositBalanceAtLevel = async (
+  accountAddress,
+  network,
+  daoAddress,
+  level
+) => {
+  const url = `https://api.${network}.tzkt.io/v1/contracts/${daoAddress}/bigmaps/freeze_history/historical_keys/${level}?key.eq=${accountAddress}`;
+  const response = await axios({ url, method: "GET" });
+  if (response.status !== 200) {
+    throw new Error("Failed to fetch user dao balance");
+  }
+  const userStakedBalances = response.data;
+
+  let userDAODepositBalance = new BigNumber(0);
+  if (userStakedBalances && userStakedBalances[0]) {
+    const userStakedBalance = new BigNumber(userStakedBalances[0].value.staked);
+    const userCurrentUnstakedBalance = new BigNumber(
+      userStakedBalances[0].value.current_unstaked
+    );
+    const userPastUnstakedBalance = new BigNumber(
+      userStakedBalances[0].value.past_unstaked
+    );
+
+    userDAODepositBalance = userStakedBalance
+      .plus(userCurrentUnstakedBalance)
+      .plus(userPastUnstakedBalance);
+  }
+
+  return userDAODepositBalance;
+};
+
+const getUserTotalVotingPowerAtReferenceBlock = async (
+  network,
+  address,
+  daoContract,
+  tokenID,
+  level,
+  userAddress
+) => {
+  try {
+    let userVotingPower = new BigNumber(0);
+
+    const isTokenDelegation = await isTokenDelegationSupported(
+      network,
+      address
+    );
+
+    if (isTokenDelegation) {
+      const userVotePower = await getUserTotalVotingWeightAtBlock(
+        network,
+        address,
+        level,
+        userAddress
+      );
+      if (!userVotePower) {
+        throw new Error("Could Not get voting weight");
+      }
+      userVotingPower = userVotingPower.plus(userVotePower);
+    } else {
+      const selfBalance = await getUserBalanceAtLevel(
+        network,
+        address,
+        tokenID,
+        level,
+        userAddress
+      );
+      userVotingPower = userVotingPower.plus(selfBalance);
+
+      if (daoContract) {
+        const userDAODepositBalance = await getUserDAODepositBalanceAtLevel(
+          userAddress,
+          network,
+          daoContract,
+          level
+        );
+        userVotingPower = userVotingPower.plus(userDAODepositBalance);
+      }
+    }
+
+    return userVotingPower;
+  } catch (error) {
+    console.log("error: ", error);
+    throw error;
+  }
+};
+
+const isTokenDelegationSupported = async (network, address) => {
+  const tezos = new TezosToolkit(rpcNodes[network]);
+  const token = await tezos.wallet.at(address);
+
+  const contractViews = Object.keys(token.contractViews);
+  const votingPowerView = contractViews.find((view) => view === "voting_power");
+
+  if (votingPowerView) {
+    return true;
+  }
+
+  return false;
 };
 
 module.exports = {
   getInputFromSigPayload,
   getTotalSupplyAtCurrentBlock,
   getCurrentBlock,
-  getUserTotalSupplyAtReferenceBlock,
+  getUserTotalVotingWeightAtBlock,
+  getUserTotalVotingPowerAtReferenceBlock,
+  getUserBalanceAtLevel,
 };
