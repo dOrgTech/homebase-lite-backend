@@ -1,10 +1,15 @@
 const ObjectId = require("mongodb").ObjectId;
 
 const { getTokenMetadata } = require("../../services");
-const { getInputFromSigPayload } = require("../../utils");
+const {
+  getInputFromSigPayload,
+  getCurrentBlock,
+  getUserTotalVotingPowerAtReferenceBlock,
+} = require("../../utils");
 
 const dbo = require("../../db/conn");
 const { response } = require("express");
+const { getPkhfromPk } = require("@taquito/utils");
 
 const getAllLiteOnlyDAOs = async (req, response) => {
   const { network } = req.body;
@@ -144,10 +149,23 @@ const updateTotalHolders = async (req, response) => {
 };
 
 const createDAO = async (req, response) => {
-  const { payloadBytes } = req.body;
+  const { payloadBytes, publicKey } = req.body;
 
   try {
     const values = getInputFromSigPayload(payloadBytes);
+    const {
+      tokenAddress,
+      tokenID,
+      network,
+      name,
+      description,
+      linkToTerms,
+      picUri,
+      requiredTokenOwnership,
+      allowPublicAccess,
+      daoContract,
+    } = values;
+
     let db_connect = dbo.getDb();
 
     const mongoClient = dbo.getClient();
@@ -155,31 +173,40 @@ const createDAO = async (req, response) => {
 
     const original_id = ObjectId();
 
-    const tokenAddress = values.tokenAddress;
-    const tokenID = values.tokenID;
-
-    const tokenData = await getTokenMetadata(
-      tokenAddress,
-      values.network,
-      tokenID
-    );
+    const tokenData = await getTokenMetadata(tokenAddress, network, tokenID);
+    const address = getPkhfromPk(publicKey);
 
     let DAOData = {
-      name: values.name,
-      description: values.description,
-      linkToTerms: values.linkToTerms,
-      picUri: values.picUri,
-      members: values.members,
-      polls: values.polls,
-      tokenAddress: values.tokenAddress,
+      name,
+      description,
+      linkToTerms,
+      picUri,
+      members: [address],
+      polls: [],
+      tokenAddress,
       tokenType: tokenData.standard,
-      requiredTokenOwnership: values.requiredTokenOwnership,
-      allowPublicAccess: values.allowPublicAccess,
+      requiredTokenOwnership,
+      allowPublicAccess,
       _id: original_id,
-      network: values.network,
-      daoContract: values?.daoContract,
-      votingAddressesCount: values.votingAddressesCount,
+      network,
+      daoContract,
+      votingAddressesCount: 0,
     };
+
+    const block = await getCurrentBlock(network);
+    const userVotingPowerAtCurrentLevel =
+      await getUserTotalVotingPowerAtReferenceBlock(
+        network,
+        tokenAddress,
+        daoContract,
+        tokenID,
+        block,
+        address
+      );
+
+    if (userVotingPowerAtCurrentLevel.eq(0)) {
+      throw new Error("User Doesnt have balance for this dao token");
+    }
 
     try {
       await session
@@ -218,13 +245,15 @@ const createDAO = async (req, response) => {
 };
 
 const joinDAO = async (req, response) => {
-  const { payloadBytes } = req.body;
+  const { payloadBytes, publicKey } = req.body;
 
   try {
     let db_connect = dbo.getDb();
     const DAOCollection = db_connect.collection("DAOs");
     const values = getInputFromSigPayload(payloadBytes);
-    const { address, daoId } = values;
+    const { daoId } = values;
+
+    const address = getPkhfromPk(publicKey);
 
     let id = { _id: ObjectId(daoId) };
     let data = [
