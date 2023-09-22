@@ -7,6 +7,7 @@ const {
   getUserTotalVotingPowerAtReferenceBlock,
 } = require("../../utils");
 const { default: BigNumber } = require("bignumber.js");
+const { getPkhfromPk } = require("@taquito/utils");
 
 // This help convert the id from string to ObjectId for the _id.
 const ObjectId = require("mongodb").ObjectId;
@@ -32,8 +33,7 @@ const getChoiceById = async (req, response) => {
 };
 
 const updateChoiceById = async (req, response) => {
-  const { id } = req.params;
-  const { payloadBytes } = req.body;
+  const { payloadBytes, publicKey } = req.body;
 
   let j = 0;
   let i = 0;
@@ -64,7 +64,7 @@ const updateChoiceById = async (req, response) => {
 
     const block = poll.referenceBlock;
 
-    const address = values[0].address;
+    const address = getPkhfromPk(publicKey);
 
     // Validate values
     values.forEach((value) => {
@@ -95,7 +95,7 @@ const updateChoiceById = async (req, response) => {
 
     await Promise.all(
       values.map(async (value) => {
-        const { address, choiceId } = value;
+        const { choiceId } = value;
 
         let walletVote = {
           address,
@@ -267,58 +267,6 @@ const choicesByUser = async (req, response) => {
   }
 };
 
-const addChoice = async function (req, response) {
-  const { id } = req.params.id;
-  const { data } = req.body;
-
-  try {
-    let db_connect = dbo.getDb();
-    const mongoClient = dbo.getClient();
-    const session = mongoClient.startSession();
-    let idObj = { _id: ObjectId(id) };
-
-    let newData = {
-      $push: {
-        walletAddresses: data.newVote,
-      },
-    };
-
-    let remove = {
-      $pull: {
-        walletAddresses: { address: data.oldVote.walletAddresses[0].address },
-      },
-    };
-
-    try {
-      await session
-        .withTransaction(async () => {
-          const coll1 = db_connect.collection("Choices");
-          // Important:: You must pass the session to the operations
-          await coll1.updateOne(
-            { _id: ObjectId(data.oldVote._id) },
-            remove,
-            { remove: true },
-            { session }
-          );
-
-          await coll1.updateOne(idObj, newData, { session });
-        })
-        .then((res) => response.json(res));
-    } catch (e) {
-      result = e.Message;
-      console.log(e);
-      await session.abortTransaction();
-    } finally {
-      await session.endSession();
-    }
-  } catch (error) {
-    console.log("error: ", error);
-    response.status(400).send({
-      message: error.message,
-    });
-  }
-};
-
 const getPollVotes = async (req, response) => {
   const { id } = req.params;
   let total = 0;
@@ -345,6 +293,5 @@ module.exports = {
   getChoiceById,
   updateChoiceById,
   choicesByUser,
-  addChoice,
   getPollVotes,
 };

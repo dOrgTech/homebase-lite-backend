@@ -1,4 +1,5 @@
 // This will help us connect to the database
+const { getPkhfromPk } = require("@taquito/utils");
 const dbo = require("../../db/conn");
 const {
   getInputFromSigPayload,
@@ -49,10 +50,23 @@ const getPollsById = async (req, response) => {
 };
 
 const addPoll = async (req, response) => {
-  const { payloadBytes } = req.body;
+  const { payloadBytes, publicKey } = req.body;
 
   try {
     const values = getInputFromSigPayload(payloadBytes);
+
+    const {
+      choices,
+      daoID,
+      name,
+      description,
+      externalLink,
+      startTime,
+      endTime,
+      votingStrategy,
+    } = values;
+
+    const author = getPkhfromPk(publicKey);
 
     const mongoClient = dbo.getClient();
     const session = mongoClient.startSession();
@@ -60,7 +74,7 @@ const addPoll = async (req, response) => {
 
     const poll_id = ObjectId();
 
-    const ChoicesData = values.choices.map((element) => {
+    const choicesData = choices.map((element) => {
       return {
         name: element,
         pollID: poll_id,
@@ -69,13 +83,13 @@ const addPoll = async (req, response) => {
       };
     });
 
-    const choicesPoll = ChoicesData.map((element) => {
+    const choicesPoll = choicesData.map((element) => {
       return element._id;
     });
 
     const dao = await db_connect
       .collection("DAOs")
-      .findOne({ _id: ObjectId(values.daoID) });
+      .findOne({ _id: ObjectId(daoID) });
     if (!dao) {
       throw new Error("DAO Does not exist");
     }
@@ -101,7 +115,7 @@ const addPoll = async (req, response) => {
         dao.daoContract,
         token.tokenID,
         block,
-        values.author
+        author
       );
 
     if (userVotingPowerAtCurrentLevel.eq(0) && dao.requiredTokenOwnership) {
@@ -115,18 +129,18 @@ const addPoll = async (req, response) => {
     }
 
     let PollData = {
-      name: values.name,
-      description: values.description,
-      externalLink: values.externalLink,
-      startTime: values.startTime,
-      endTime: values.endTime,
-      daoID: values.daoID,
+      name,
+      description,
+      externalLink,
+      startTime,
+      endTime,
+      daoID,
       referenceBlock: block,
       totalSupplyAtReferenceBlock: total,
       _id: poll_id,
       choices: choicesPoll,
-      author: values.author,
-      votingStrategy: values.votingStrategy,
+      author,
+      votingStrategy,
     };
 
     let data = {
@@ -135,7 +149,7 @@ const addPoll = async (req, response) => {
       },
     };
 
-    let id = { _id: ObjectId(values.daoID) };
+    let id = { _id: ObjectId(daoID) };
 
     try {
       await session
@@ -146,7 +160,7 @@ const addPoll = async (req, response) => {
           // Important:: You must pass the session to the operations
           await coll1.insertOne(PollData, { session });
 
-          await coll2.insertMany(ChoicesData, { session });
+          await coll2.insertMany(choicesData, { session });
 
           await coll3.updateOne(id, data, { session });
         })
