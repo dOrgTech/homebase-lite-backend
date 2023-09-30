@@ -194,6 +194,8 @@ const createDAO = async (req, response) => {
     };
 
     const block = await getCurrentBlock(network);
+    console.log("block: ", block);
+
     const userVotingPowerAtCurrentLevel =
       await getUserTotalVotingPowerAtReferenceBlock(
         network,
@@ -203,6 +205,26 @@ const createDAO = async (req, response) => {
         block,
         address
       );
+
+    console.log(
+      `network,
+    tokenAddress,
+    daoContract,
+    tokenID,
+    block,
+    address`,
+      network,
+      tokenAddress,
+      daoContract,
+      tokenID,
+      block,
+      address
+    );
+
+    console.log(
+      "userVotingPowerAtCurrentLevel: ",
+      userVotingPowerAtCurrentLevel
+    );
 
     if (userVotingPowerAtCurrentLevel.eq(0)) {
       throw new Error("User Doesnt have balance for this dao token");
