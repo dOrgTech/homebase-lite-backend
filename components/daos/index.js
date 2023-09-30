@@ -4,7 +4,7 @@ const { getTokenMetadata } = require("../../services");
 const {
   getInputFromSigPayload,
   getCurrentBlock,
-  getUserTotalVotingPowerAtReferenceBlock,
+  getUserBalanceAtLevel,
 } = require("../../utils");
 
 const dbo = require("../../db/conn");
@@ -194,18 +194,17 @@ const createDAO = async (req, response) => {
     };
 
     const block = await getCurrentBlock(network);
-    const userVotingPowerAtCurrentLevel =
-      await getUserTotalVotingPowerAtReferenceBlock(
-        network,
-        tokenAddress,
-        daoContract,
-        tokenID,
-        block,
-        address
-      );
 
-    if (userVotingPowerAtCurrentLevel.eq(0)) {
-      throw new Error("User Doesnt have balance for this dao token");
+    const userBalanceAtCurrentLevel = await getUserBalanceAtLevel(
+      network,
+      tokenAddress,
+      tokenID,
+      block,
+      address
+    );
+
+    if (userBalanceAtCurrentLevel.eq(0)) {
+      throw new Error("User does not have balance for this DAO token");
     }
 
     try {
