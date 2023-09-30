@@ -1,7 +1,11 @@
 const ObjectId = require("mongodb").ObjectId;
 
 const { getTokenMetadata } = require("../../services");
-const { getInputFromSigPayload } = require("../../utils");
+const {
+  getInputFromSigPayload,
+  getCurrentBlock,
+  getUserTotalVotingPowerAtReferenceBlock,
+} = require("../../utils");
 
 const dbo = require("../../db/conn");
 const { response } = require("express");
@@ -188,6 +192,21 @@ const createDAO = async (req, response) => {
       daoContract,
       votingAddressesCount: 0,
     };
+
+    const block = await getCurrentBlock(network);
+    const userVotingPowerAtCurrentLevel =
+      await getUserTotalVotingPowerAtReferenceBlock(
+        network,
+        tokenAddress,
+        daoContract,
+        tokenID,
+        block,
+        address
+      );
+
+    if (userVotingPowerAtCurrentLevel.eq(0)) {
+      throw new Error("User Doesnt have balance for this dao token");
+    }
 
     try {
       await session
