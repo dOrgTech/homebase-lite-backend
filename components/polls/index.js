@@ -5,7 +5,6 @@ const {
   getInputFromSigPayload,
   getCurrentBlock,
   getTotalSupplyAtCurrentBlock,
-  getUserBalanceAtLevel,
   getUserTotalVotingPowerAtReferenceBlock,
 } = require("../../utils");
 
@@ -61,7 +60,6 @@ const addPoll = async (req, response) => {
       name,
       description,
       externalLink,
-      startTime,
       endTime,
       votingStrategy,
     } = values;
@@ -73,6 +71,14 @@ const addPoll = async (req, response) => {
     let db_connect = dbo.getDb();
 
     const poll_id = ObjectId();
+
+    const currentTime = new Date().valueOf();
+
+    const startTime = currentTime;
+
+    if (Number(endTime) <= currentTime) {
+      throw new Error("End Time has to be in future");
+    }
 
     const choicesData = choices.map((element) => {
       return {

@@ -180,6 +180,18 @@ const isTokenDelegationSupported = async (network, address) => {
   return false;
 };
 
+const getTokenHoldersCount = async (network, address, tokenID) => {
+  const url = `https://api.${network}.tzkt.io/v1/tokens?tokenId=${tokenID}&contract=${address}`;
+
+  const response = await axios({ url, method: "GET" });
+  if (response.status !== 200) {
+    throw new Error("Failed to fetch user dao balance");
+  }
+  const result = response.data;
+
+  return result[0].holdersCount;
+};
+
 module.exports = {
   getInputFromSigPayload,
   getTotalSupplyAtCurrentBlock,
@@ -187,4 +199,5 @@ module.exports = {
   getUserTotalVotingWeightAtBlock,
   getUserTotalVotingPowerAtReferenceBlock,
   getUserBalanceAtLevel,
+  getTokenHoldersCount,
 };
