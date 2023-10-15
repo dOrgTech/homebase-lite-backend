@@ -76,22 +76,20 @@ const addPoll = async (req, response) => {
 
     const startTime = currentTime;
 
+    if (choices.length === 0) {
+      throw new Error("No choices sent in the request");
+    }
+
     if (Number(endTime) <= currentTime) {
       throw new Error("End Time has to be in future");
     }
 
-    const choicesData = choices.map((element) => {
-      return {
-        name: element,
-        pollID: poll_id,
-        walletAddresses: [],
-        _id: ObjectId(),
-      };
-    });
-
-    const choicesPoll = choicesData.map((element) => {
-      return element._id;
-    });
+    let duplicates = choices.filter(
+      (item, index) => choices.indexOf(item.trim()) !== index
+    );
+    if (duplicates.length > 0) {
+      throw new Error("Duplicate choices found");
+    }
 
     const dao = await db_connect
       .collection("DAOs")
@@ -133,6 +131,19 @@ const addPoll = async (req, response) => {
     if (!total) {
       await session.abortTransaction();
     }
+
+    const choicesData = choices.map((element) => {
+      return {
+        name: element,
+        pollID: poll_id,
+        walletAddresses: [],
+        _id: ObjectId(),
+      };
+    });
+
+    const choicesPoll = choicesData.map((element) => {
+      return element._id;
+    });
 
     let PollData = {
       name,
