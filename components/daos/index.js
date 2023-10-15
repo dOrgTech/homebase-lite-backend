@@ -5,6 +5,7 @@ const {
   getInputFromSigPayload,
   getCurrentBlock,
   getUserBalanceAtLevel,
+  getTokenHoldersCount,
 } = require("../../utils");
 
 const dbo = require("../../db/conn");
@@ -102,15 +103,34 @@ const getDAOById = async (req, response) => {
 
 const updateTotalCount = async (req, response) => {
   const { id } = req.params;
-  const { count } = req.body;
   try {
     let db_connect = dbo.getDb();
+
+    const DAOCollection = db_connect.collection("DAOs");
+    let communityId = { _id: ObjectId(id) };
+    const dao = await DAOCollection.findOne(communityId);
+    if (!dao) {
+      throw new Error("DAO not found");
+    }
+
+    const token = await db_connect
+      .collection("Tokens")
+      .findOne({ tokenAddress: dao.tokenAddress });
+    if (!token) {
+      throw new Error("DAO Token Does not exist in system");
+    }
+
+    const count = await getTokenHoldersCount(
+      dao.network,
+      token.tokenAddress,
+      token.tokenID
+    );
+
     let data = {
       $set: {
         votingAddressesCount: count,
       },
     };
-    let communityId = { _id: ObjectId(id) };
     const res = await db_connect
       .collection("DAOs")
       .updateOne(communityId, data, { upsert: true });

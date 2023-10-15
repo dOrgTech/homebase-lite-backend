@@ -48,7 +48,7 @@ const updateChoiceById = async (req, response) => {
       .collection("Polls")
       .findOne({ _id: ObjectId(pollID) });
 
-    const timeNow = Number(new Date());
+    const timeNow = new Date().valueOf();
 
     if (timeNow > poll.endTime) {
       throw new Error("Proposal Already Ended");
@@ -67,6 +67,10 @@ const updateChoiceById = async (req, response) => {
     const address = getPkhfromPk(publicKey);
 
     // Validate values
+    if (values.length === 0) {
+      throw new Error("No choices sent in the request");
+    }
+
     values.forEach((value) => {
       if (value.address !== address) {
         throw new Error("Invalid Proposal Body, Invalid Address in choices");
@@ -75,6 +79,14 @@ const updateChoiceById = async (req, response) => {
         throw new Error("Invalid Proposal Body, Invalid Poll ID in choices");
       }
     });
+
+    const choiceIds = values.map((value) => value.choiceId);
+    let duplicates = choiceIds.filter(
+      (item, index) => choiceIds.indexOf(item.trim()) !== index
+    );
+    if (duplicates.length > 0) {
+      throw new Error("Duplicate choices found");
+    }
 
     const total = await getUserTotalVotingPowerAtReferenceBlock(
       dao.network,
