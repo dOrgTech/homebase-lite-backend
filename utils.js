@@ -14,28 +14,20 @@ const getInputFromSigPayload = (payloadBytes) => {
 };
 
 const getTotalSupplyAtCurrentBlock = async (network, address, tokenID) => {
-  try {
-    const url = `https://api.${network}.tzkt.io/v1/tokens?contract=${address}&tokenId=${tokenID}`;
-    const response = await axios({ url, method: "GET" });
+  const url = `https://api.${network}.tzkt.io/v1/tokens?contract=${address}&tokenId=${tokenID}`;
+  const response = await axios({ url, method: "GET" });
 
-    if (response.status === 200) {
-      return response.data[0].totalSupply;
-    }
-  } catch (error) {
-    console.log("error: ", error);
+  if (response.status === 200) {
+    return response.data[0].totalSupply;
   }
 };
 
 const getCurrentBlock = async (network) => {
-  try {
-    const url = `https://api.${network}.tzkt.io/v1/head`;
-    const response = await axios({ url, method: "GET" });
+  const url = `https://api.${network}.tzkt.io/v1/head`;
+  const response = await axios({ url, method: "GET" });
 
-    if (response.status === 200) {
-      return response.data.level;
-    }
-  } catch (error) {
-    console.log("error: ", error);
+  if (response.status === 200) {
+    return response.data.level;
   }
 };
 
@@ -119,51 +111,43 @@ const getUserTotalVotingPowerAtReferenceBlock = async (
   level,
   userAddress
 ) => {
-  try {
-    let userVotingPower = new BigNumber(0);
+  let userVotingPower = new BigNumber(0);
 
-    const isTokenDelegation = await isTokenDelegationSupported(
+  const isTokenDelegation = await isTokenDelegationSupported(network, address);
+
+  if (isTokenDelegation) {
+    const userVotePower = await getUserTotalVotingWeightAtBlock(
       network,
-      address
+      address,
+      level,
+      userAddress
     );
-
-    if (isTokenDelegation) {
-      const userVotePower = await getUserTotalVotingWeightAtBlock(
-        network,
-        address,
-        level,
-        userAddress
-      );
-      if (!userVotePower) {
-        throw new Error("Could Not get voting weight");
-      }
-      userVotingPower = userVotingPower.plus(userVotePower);
-    } else {
-      const selfBalance = await getUserBalanceAtLevel(
-        network,
-        address,
-        tokenID,
-        level,
-        userAddress
-      );
-      userVotingPower = userVotingPower.plus(selfBalance);
-
-      if (daoContract) {
-        const userDAODepositBalance = await getUserDAODepositBalanceAtLevel(
-          userAddress,
-          network,
-          daoContract,
-          level
-        );
-        userVotingPower = userVotingPower.plus(userDAODepositBalance);
-      }
+    if (!userVotePower) {
+      throw new Error("Could Not get voting weight");
     }
+    userVotingPower = userVotingPower.plus(userVotePower);
+  } else {
+    const selfBalance = await getUserBalanceAtLevel(
+      network,
+      address,
+      tokenID,
+      level,
+      userAddress
+    );
+    userVotingPower = userVotingPower.plus(selfBalance);
 
-    return userVotingPower;
-  } catch (error) {
-    console.log("error: ", error);
-    throw error;
+    if (daoContract) {
+      const userDAODepositBalance = await getUserDAODepositBalanceAtLevel(
+        userAddress,
+        network,
+        daoContract,
+        level
+      );
+      userVotingPower = userVotingPower.plus(userDAODepositBalance);
+    }
   }
+
+  return userVotingPower;
 };
 
 const isTokenDelegationSupported = async (network, address) => {
@@ -192,6 +176,25 @@ const getTokenHoldersCount = async (network, address, tokenID) => {
   return result[0].holdersCount;
 };
 
+const getTimestampFromPayloadBytes = (payloadBytes) => {
+  const parsedPayloadBytesString = bytes2Char(payloadBytes);
+  const valuesParsed = parsedPayloadBytesString.split(" ");
+
+  const dateString = valuesParsed[4];
+  const date = new Date(dateString).valueOf();
+
+  return date;
+};
+
+const getIPFSProofFromPayload = (payloadBytes, signature) => {
+  return bytes2Char(payloadBytes).toString().concat(
+    JSON.stringify({
+      signature,
+      payloadBytes,
+    })
+  );
+};
+
 module.exports = {
   getInputFromSigPayload,
   getTotalSupplyAtCurrentBlock,
@@ -200,4 +203,6 @@ module.exports = {
   getUserTotalVotingPowerAtReferenceBlock,
   getUserBalanceAtLevel,
   getTokenHoldersCount,
+  getTimestampFromPayloadBytes,
+  getIPFSProofFromPayload,
 };

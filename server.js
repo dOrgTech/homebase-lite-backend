@@ -27,7 +27,7 @@ app.listen(port, async () => {
   try {
     dbo.connectToServer();
   } catch (error) {
-    console.error(err);
+    console.error(error);
   }
 
   console.log(`Server is running on port: ${port}`);
