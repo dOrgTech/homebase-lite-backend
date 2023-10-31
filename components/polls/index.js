@@ -181,7 +181,7 @@ const addPoll = async (req, response) => {
 
           await coll3.updateOne(id, data, { session });
         })
-        .then((res) => response.json(res));
+        .then((res) => response.json({ res, pollId: poll_id }));
     } catch (e) {
       result = e.Message;
       console.log(e);
