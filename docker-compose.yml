@@ -6,7 +6,7 @@ services:
     volumes:
       - .:/usr/src/app
     ports:
-      - "3000:3000" # Replace with the actual port used by the application
+      - "5000:5000" # Replace with the actual port used by the application
     command: >
       sh -c "yarn install
       && yarn start"
