@@ -6,13 +6,12 @@ services:
     volumes:
       - .:/usr/src/app
     ports:
-      - "5000:5000" # Replace with the actual port used by the application
+      - "5000:5000" # Default/fallback port
     command: >
       sh -c "yarn install
       && yarn start"
-    environment:
-      - NODE_ENV=development # or production, depending on the use case
-      - ATLAS_URI=mongodb://mongo:27017/Lite # URI for connecting to the MongoDB service
+    env_file:
+      - config.env
     depends_on:
       - mongo
 
@@ -21,9 +20,8 @@ services:
     ports:
       - "27017:27017"
     environment:
-      - MONGO_INITDB_DATABASE=Lite # Initial database name
+      - MONGO_INITDB_DATABASE=Lite
 
-# Networks to enable communication between containers
 networks:
   default:
     driver: bridge
