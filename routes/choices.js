@@ -7,6 +7,7 @@ const {
   updateChoiceById,
   choicesByUser,
   getPollVotes,
+  votesByUser
 } = require("../components/choices");
 
 const choicesRoutes = express.Router();
@@ -53,6 +54,26 @@ choicesRoutes
   .route("/update/choice")
   .all(requireSignature)
   .post(updateChoiceById);
+/**
+ * @swagger
+ * /choices/{id}/user_votes:
+ *   get:
+ *     summary: Get user votes for a specific choice by its ID (pollID)
+ *     tags: [Choices]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         description: The ID of the choice for which to retrieve user votes
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: List of user votes for the specified choice
+ *       404:
+ *         description: Choice not found
+ */
+choicesRoutes.route("/choices/:id/user_votes").get(votesByUser);
 /**
  * @swagger
  * /choices/{id}/user:

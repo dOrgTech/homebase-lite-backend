@@ -271,6 +271,25 @@ const choicesByUser = async (req, response) => {
       .findOne({ "walletAddresses.address": id });
 
     response.json(res);
+
+  } catch (error) {
+    console.log("error: ", error);
+    response.status(400).send({
+      message: error.message,
+    });
+  }
+};
+
+const votesByUser = async (req, response) => {
+  const { id } = req.params;
+
+  try {
+    const choices = [];
+    let db_connect = dbo.getDb("Lite");
+    const cursor = await db_connect.collection("Choices").find({ "walletAddresses.address": id });
+    await cursor.forEach((elem) => choices.push(elem));
+    return response.json(choices);
+
   } catch (error) {
     console.log("error: ", error);
     response.status(400).send({
@@ -306,4 +325,5 @@ module.exports = {
   updateChoiceById,
   choicesByUser,
   getPollVotes,
+  votesByUser
 };
