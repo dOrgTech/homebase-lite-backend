@@ -16,18 +16,139 @@ const {
 // We use it to define our routes.
 // The router will be added as a middleware and will take control of requests starting with path /record.
 const daoRoutes = express.Router();
-// This section will help you update a record by id.
+/**
+ * @swagger
+ * /daos/join:
+ *   post:
+ *     summary: Join a DAO
+ *     tags: [DAOs]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               daoId:
+ *                 type: string
+ *                 description: The ID of the DAO to join
+ *     responses:
+ *       200:
+ *         description: Successfully joined the DAO
+ */
 daoRoutes.route("/daos/join").all(requireSignature).post(joinDAO);
-// This section will help you create a new record.
+/**
+ * @swagger
+ * /dao/add:
+ *   post:
+ *     summary: Create a new DAO
+ *     tags: [DAOs]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               daoDetails:
+ *                 type: object
+ *                 description: The details of the DAO to be created
+ *     responses:
+ *       200:
+ *         description: DAO created successfully
+ */
 daoRoutes.route("/dao/add").all(requireSignature).post(createDAO);
-// This section will help you get a list of all the records.
+/**
+ * @swagger
+ * /daos:
+ *   post:
+ *     summary: Get a list of all DAOs
+ *     tags: [DAOs]
+ *     responses:
+ *       200:
+ *         description: A list of DAOs
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ */
 daoRoutes.route("/daos").post(getAllLiteOnlyDAOs);
+/**
+ * @swagger
+ * /daos/contracts/{daoContract}:
+ *   post:
+ *     summary: Get a DAO from its contract address
+ *     tags: [DAOs]
+ *     parameters:
+ *       - in: path
+ *         name: daoContract
+ *         required: true
+ *         description: The contract address of the DAO
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Details of the DAO
+ */
 daoRoutes.route("/daos/contracts/:daoContract").post(getDAOFromContractAddress);
-// This section will help you get a single record by id
+/**
+ * @swagger
+ * /daos/{id}:
+ *   get:
+ *     summary: Get a single DAO by its ID
+ *     tags: [DAOs]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         description: The ID of the DAO
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Details of the DAO
+ */
 daoRoutes.route("/daos/:id").get(getDAOById);
-// This section adds a new field to DAO Collection
+/**
+ * @swagger
+ * /daos/create/voting:
+ *   get:
+ *     summary: Add a new field to DAO Collection
+ *     tags: [DAOs]
+ *     responses:
+ *       200:
+ *         description: New field added to DAO Collection
+ */
 daoRoutes.route("/daos/create/voting").get(updateTotalHolders);
-// This section updates total voting addresses count 
+/**
+ * @swagger
+ * /daos/count/{id}:
+ *   post:
+ *     summary: Update total voting addresses count in a DAO
+ *     tags: [DAOs]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         description: The ID of the DAO for which to update the count
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               newCount:
+ *                 type: integer
+ *                 description: The new total count of voting addresses
+ *     responses:
+ *       200:
+ *         description: Total voting addresses count updated
+ */
 daoRoutes.route("/daos/count/:id").post(updateTotalCount);
 
 

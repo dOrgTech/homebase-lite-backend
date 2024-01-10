@@ -17,6 +17,10 @@ app.use(
 
 app.use(express.json());
 
+// Include Swagger route at the base URL
+app.use('/', require('./routes/swagger'));
+
+// Other routes are included after the Swagger route
 app.use(require("./routes/daos"));
 app.use(require("./routes/polls"));
 app.use(require("./routes/tokens"));

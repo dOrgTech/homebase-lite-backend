@@ -1,0 +1,27 @@
+version: '3.8'
+services:
+  app:
+    image: node:latest
+    working_dir: /usr/src/app
+    volumes:
+      - .:/usr/src/app
+    ports:
+      - "5000:5000" # Default/fallback port
+    command: >
+      sh -c "yarn install
+      && yarn start"
+    env_file:
+      - config.env
+    depends_on:
+      - mongo
+
+  mongo:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_DATABASE=Lite
+
+networks:
+  default:
+    driver: bridge
