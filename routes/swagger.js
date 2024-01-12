@@ -1,4 +1,3 @@
-// swagger.js
 const express = require('express');
 const router = express.Router();
 const swaggerUi = require('swagger-ui-express');
@@ -14,13 +13,17 @@ const swaggerOptions = {
       description: 'API documentation for Homebase Lite Backend',
     },
   },
-  // Paths to files containing OpenAPI definitions
   apis: ['./routes/*.js'],
 };
 
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
 
-// Set up Swagger UI route
-router.use('/', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+// Serve static files for Swagger UI
+router.use(swaggerUi.serve);
+
+// Custom middleware for serving Swagger UI only on the root path
+router.get('/', (req, res) => {
+  res.send(swaggerUi.generateHTML(swaggerSpec));
+});
 
 module.exports = router;
