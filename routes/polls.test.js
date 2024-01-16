@@ -1,6 +1,6 @@
 const request = require("supertest");
 const express = require("express");
-const pollsRoutes = require("../routes/polls");
+const pollsRoutes = require("./polls");
 
 const app = express();
 app.use(express.json());
@@ -21,9 +21,6 @@ describe("Polls Routes", () => {
       .expect("Content-Type", /json/);
   });
   it("should not add a poll with an invalid signature payload", async () => {
-    await request(app)
-      .post(`/poll/add`)
-      .send("")
-      .expect(500)
+    await request(app).post(`/poll/add`).send("").expect(500);
   });
 });

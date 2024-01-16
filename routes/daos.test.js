@@ -1,6 +1,6 @@
 const request = require("supertest");
 const express = require("express");
-const daosRoutes = require("../routes/daos");
+const daosRoutes = require("./daos");
 
 const app = express();
 app.use(express.json());
