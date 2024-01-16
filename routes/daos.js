@@ -35,6 +35,8 @@ const daoRoutes = express.Router();
  *     responses:
  *       200:
  *         description: Successfully joined the DAO
+ *       500:
+ *         description: Invalid signature payload
  */
 daoRoutes.route("/daos/join").all(requireSignature).post(joinDAO);
 /**
@@ -56,6 +58,8 @@ daoRoutes.route("/daos/join").all(requireSignature).post(joinDAO);
  *     responses:
  *       200:
  *         description: DAO created successfully
+ *       500:
+ *         description: Invalid signature payload
  */
 daoRoutes.route("/dao/add").all(requireSignature).post(createDAO);
 /**
@@ -73,6 +77,8 @@ daoRoutes.route("/dao/add").all(requireSignature).post(createDAO);
  *               type: array
  *               items:
  *                 type: object
+ *       500:
+ *         description: Invalid signature payload
  */
 daoRoutes.route("/daos").post(getAllLiteOnlyDAOs);
 /**
@@ -91,6 +97,8 @@ daoRoutes.route("/daos").post(getAllLiteOnlyDAOs);
  *     responses:
  *       200:
  *         description: Details of the DAO
+ *       400:
+ *         description: Invalid signature payload
  */
 daoRoutes.route("/daos/contracts/:daoContract").post(getDAOFromContractAddress);
 /**
@@ -109,6 +117,8 @@ daoRoutes.route("/daos/contracts/:daoContract").post(getDAOFromContractAddress);
  *     responses:
  *       200:
  *         description: Details of the DAO
+ *       400:
+ *         description: Invalid signature payload
  */
 daoRoutes.route("/daos/:id").get(getDAOById);
 /**
@@ -120,6 +130,8 @@ daoRoutes.route("/daos/:id").get(getDAOById);
  *     responses:
  *       200:
  *         description: New field added to DAO Collection
+ *       400:
+ *         description: Invalid signature payload
  */
 daoRoutes.route("/daos/create/voting").get(updateTotalHolders);
 /**
@@ -148,6 +160,8 @@ daoRoutes.route("/daos/create/voting").get(updateTotalHolders);
  *     responses:
  *       200:
  *         description: Total voting addresses count updated
+ *       400:
+ *         description: Invalid signature payload
  */
 daoRoutes.route("/daos/count/:id").post(updateTotalCount);
 
