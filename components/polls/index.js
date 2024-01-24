@@ -98,14 +98,6 @@ const addPoll = async (req, response) => {
       throw new Error("DAO Does not exist");
     }
 
-    if (
-      dao.whitelistedUsers &&
-      dao.whitelistedUsers.length > 0 &&
-      !dao.whitelistedUsers.includes(author)
-    ) {
-      throw new Error("Only whitelisted users can create polls on this DAO");
-    }
-
     const token = await db_connect
       .collection("Tokens")
       .findOne({ tokenAddress: dao.tokenAddress });
