@@ -39,10 +39,10 @@ const updateChoiceById = async (req, response) => {
   let i = 0;
 
   try {
-    const values = getInputFromSigPayload(payloadBytes);
+    const {votesData, isXTZ} = getInputFromSigPayload(payloadBytes);
     let db_connect = dbo.getDb("Lite");
 
-    const pollID = values[0].pollID;
+    const pollID = votesData[0].pollID;
 
     const poll = await db_connect
       .collection("Polls")
@@ -67,11 +67,11 @@ const updateChoiceById = async (req, response) => {
     const address = getPkhfromPk(publicKey);
 
     // Validate values
-    if (values.length === 0) {
+    if (votesData.length === 0) {
       throw new Error("No choices sent in the request");
     }
 
-    values.forEach((value) => {
+    votesData.forEach((value) => {
       if (value.address !== address) {
         throw new Error("Invalid Proposal Body, Invalid Address in choices");
       }
@@ -80,7 +80,7 @@ const updateChoiceById = async (req, response) => {
       }
     });
 
-    const choiceIds = values.map((value) => value.choiceId);
+    const choiceIds = votesData.map((value) => value.choiceId);
     let duplicates = choiceIds.filter(
       (item, index) => choiceIds.indexOf(item.trim()) !== index
     );
@@ -94,7 +94,8 @@ const updateChoiceById = async (req, response) => {
       dao.daoContract,
       token.tokenID,
       block,
-      address
+      address,
+      isXTZ
     );
 
     if (!total) {
@@ -106,7 +107,7 @@ const updateChoiceById = async (req, response) => {
     }
 
     await Promise.all(
-      values.map(async (value) => {
+      votesData.map(async (value) => {
         const { choiceId } = value;
 
         let walletVote = {
@@ -151,9 +152,6 @@ const updateChoiceById = async (req, response) => {
             try {
               await session.withTransaction(async () => {
                 const coll1 = db_connect.collection("Choices");
-                const coll2 = db_connect.collection("Polls");
-
-                // await coll2.updateOne({_id: poll._id},  { $set: { "votes" : values.length }})
                 // Important:: You must pass the session to the operations
                 await coll1.updateOne(
                   { _id: ObjectId(oldVote._id) },
@@ -179,7 +177,7 @@ const updateChoiceById = async (req, response) => {
             const mongoClient = dbo.getClient();
             const session = mongoClient.startSession();
 
-            const distributedWeight = total.div(new BigNumber(values.length));
+            const distributedWeight = total.div(new BigNumber(votesData.length));
 
             walletVote.balanceAtReferenceBlock = distributedWeight.toString();
 
@@ -199,8 +197,6 @@ const updateChoiceById = async (req, response) => {
               await session
                 .withTransaction(async () => {
                   const coll1 = db_connect.collection("Choices");
-                  const coll2 = db_connect.collection("Polls");
-
                   await coll1.updateOne(
                     {
                       _id: choice._id,
@@ -212,7 +208,7 @@ const updateChoiceById = async (req, response) => {
                   i++;
                 })
                 .then((res) => {
-                  if (i === values.length) {
+                  if (i === votesData.length) {
                     // response.json({ success: true });
                   }
                 });
@@ -228,8 +224,8 @@ const updateChoiceById = async (req, response) => {
         } else {
           let newId = { _id: ObjectId(choice._id) };
 
-          if (values.length > 1) {
-            const distributedWeight = total.div(new BigNumber(values.length));
+          if (votesData.length > 1) {
+            const distributedWeight = total.div(new BigNumber(votesData.length));
             walletVote.balanceAtReferenceBlock = distributedWeight.toString();
           }
           let data = {
@@ -243,7 +239,7 @@ const updateChoiceById = async (req, response) => {
 
           j++;
 
-          if (j === values.length) {
+          if (j === votesData.length) {
             // response.json({ success: true });
           } else {
             return;
