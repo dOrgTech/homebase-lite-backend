@@ -138,18 +138,15 @@ const getUserTotalVotingPowerAtReferenceBlock = async (
   tokenID,
   level,
   userAddress,
-  isXTZ
+  isXTZ = false
 ) => {
   try {
-
+    let userVotingPower = new BigNumber(0);
     if (!isXTZ) {
-      let userVotingPower = new BigNumber(0);
-
       const isTokenDelegation = await isTokenDelegationSupported(
         network,
         address
       );
-
       if (isTokenDelegation) {
         const userVotePower = await getUserTotalVotingWeightAtBlock(
           network,
@@ -184,15 +181,12 @@ const getUserTotalVotingPowerAtReferenceBlock = async (
 
       return userVotingPower;
     } else {
-      let userVotingPower = new BigNumber(0);
-
       const selfBalance = await getUserXTZBalanceAtLevel(
         network,
         level,
         userAddress
       );
-      userVotingPower = userVotingPower.plus(selfBalance);
-      return userVotingPower;
+      return userVotingPower.plus(selfBalance);
     }
   } catch (error) {
     console.log("error: ", error);

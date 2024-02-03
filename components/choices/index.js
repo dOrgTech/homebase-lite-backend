@@ -39,7 +39,7 @@ const updateChoiceById = async (req, response) => {
   let i = 0;
 
   try {
-    const {votesData, isXTZ} = getInputFromSigPayload(payloadBytes);
+    const { votesData } = getInputFromSigPayload(payloadBytes);
     let db_connect = dbo.getDb("Lite");
 
     const pollID = votesData[0].pollID;
@@ -95,7 +95,7 @@ const updateChoiceById = async (req, response) => {
       token.tokenID,
       block,
       address,
-      isXTZ
+      poll.isXTZ
     );
 
     if (!total) {
