@@ -27,6 +27,8 @@ const choicesRoutes = express.Router();
  *     responses:
  *       200:
  *         description: Details of the choice
+ *       400:
+ *         description: Invalid choice ID
  */
 choicesRoutes.route("/choices/:id/find").get(getChoiceById);
 /**
@@ -72,6 +74,8 @@ choicesRoutes
  *         description: List of user votes for the specified choice
  *       404:
  *         description: Choice not found
+ *       400:
+ *         description: Invalid choice ID
  */
 choicesRoutes.route("/choices/:id/user_votes").get(votesByUser);
 /**
@@ -90,6 +94,8 @@ choicesRoutes.route("/choices/:id/user_votes").get(votesByUser);
  *     responses:
  *       200:
  *         description: List of choices made by the user
+ *       400:
+ *         description: Invalid user ID
  */
 choicesRoutes.route("/choices/:id/user").get(choicesByUser);
 /**
@@ -108,6 +114,8 @@ choicesRoutes.route("/choices/:id/user").get(choicesByUser);
  *     responses:
  *       200:
  *         description: Vote details for the choice
+ *       400:
+ *         description: Invalid choice ID
  */
 choicesRoutes.route("/choices/:id/votes").get(getPollVotes);
 

@@ -75,10 +75,21 @@ const getVotingPowerAtLevel = async (req, response) => {
       daoContract,
       tokenID,
       level,
-      userAddress
+      userAddress,
+      isXTZ = false
     );
 
-    response.json({ votingWeight });
+    const votingXTZWeight = await getUserTotalVotingPowerAtReferenceBlock(
+      network,
+      address,
+      daoContract,
+      tokenID,
+      level,
+      userAddress,
+      isXTZ = true
+    );
+
+    response.json({ votingWeight, votingXTZWeight });
   } catch (error) {
     console.log("error: ", error);
     response.status(400).send({

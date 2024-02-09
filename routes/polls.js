@@ -24,6 +24,8 @@ const { getPollsById, getPollById, addPoll } = require("../components/polls");
  *     responses:
  *       200:
  *         description: Details of the poll
+ *       400:
+ *         description: Invalid id
  */
 pollsRoutes.route("/polls/:id/polls").get(getPollById);
 /**
@@ -42,6 +44,8 @@ pollsRoutes.route("/polls/:id/polls").get(getPollById);
  *     responses:
  *       200:
  *         description: A list of polls
+ *       400:
+ *         description: Invalid signature payload
  */
 pollsRoutes.route("/polls/:id/list").get(getPollsById);
 /**
@@ -63,6 +67,8 @@ pollsRoutes.route("/polls/:id/list").get(getPollsById);
  *     responses:
  *       200:
  *         description: Poll created successfully
+ *       500:
+ *         description: Invalid signature payload
  */
 pollsRoutes.route("/poll/add").all(requireSignature).post(addPoll);
 

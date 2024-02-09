@@ -30,6 +30,8 @@ const {
  *     responses:
  *       200:
  *         description: Token created successfully
+ *       400:
+ *         description: Invalid token
  */
 tokensRoutes.route("/token/add").post(addToken);
 /**
@@ -48,6 +50,8 @@ tokensRoutes.route("/token/add").post(addToken);
  *     responses:
  *       200:
  *         description: Details of the token
+ *       400:
+ *         description: Invalid token id
  */
 tokensRoutes.route("/token/:id").get(getTokenById);
 /**
@@ -78,6 +82,8 @@ tokensRoutes.route("/token/:id").get(getTokenById);
  *     responses:
  *       200:
  *         description: Voting power information for the token
+ *       400:
+ *         description: Invalid token location
  */
 tokensRoutes
   .route("/network/:network/token/:address/token-id/:tokenID/voting-power")

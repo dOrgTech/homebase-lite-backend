@@ -1,6 +1,6 @@
 const { MongoClient } = require("mongodb");
 
-const dbURI = process.env.ATLAS_URI;
+const dbURI = process.env.NODE_ENV === 'test' ? process.env.TEST_MONGO_URI : process.env.ATLAS_URI;
 
 const client = new MongoClient(dbURI, {
   useNewUrlParser: true,

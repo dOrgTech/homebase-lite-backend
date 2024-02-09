@@ -94,7 +94,8 @@ const updateChoiceById = async (req, response) => {
       dao.daoContract,
       token.tokenID,
       block,
-      address
+      address,
+      poll.isXTZ
     );
 
     if (!total) {
@@ -151,9 +152,6 @@ const updateChoiceById = async (req, response) => {
             try {
               await session.withTransaction(async () => {
                 const coll1 = db_connect.collection("Choices");
-                const coll2 = db_connect.collection("Polls");
-
-                // await coll2.updateOne({_id: poll._id},  { $set: { "votes" : values.length }})
                 // Important:: You must pass the session to the operations
                 await coll1.updateOne(
                   { _id: ObjectId(oldVote._id) },
@@ -199,8 +197,6 @@ const updateChoiceById = async (req, response) => {
               await session
                 .withTransaction(async () => {
                   const coll1 = db_connect.collection("Choices");
-                  const coll2 = db_connect.collection("Polls");
-
                   await coll1.updateOne(
                     {
                       _id: choice._id,
