@@ -62,6 +62,7 @@ const addPoll = async (req, response) => {
       externalLink,
       endTime,
       votingStrategy,
+      isXTZ
     } = values;
 
     const author = getPkhfromPk(publicKey);
@@ -166,6 +167,7 @@ const addPoll = async (req, response) => {
       choices: choicesPoll,
       author,
       votingStrategy,
+      isXTZ
     };
 
     let data = {
