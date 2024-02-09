@@ -39,10 +39,10 @@ const updateChoiceById = async (req, response) => {
   let i = 0;
 
   try {
-    const { votesData } = getInputFromSigPayload(payloadBytes);
+    const values = getInputFromSigPayload(payloadBytes);
     let db_connect = dbo.getDb("Lite");
 
-    const pollID = votesData[0].pollID;
+    const pollID = values[0].pollID;
 
     const poll = await db_connect
       .collection("Polls")
@@ -67,11 +67,11 @@ const updateChoiceById = async (req, response) => {
     const address = getPkhfromPk(publicKey);
 
     // Validate values
-    if (votesData.length === 0) {
+    if (values.length === 0) {
       throw new Error("No choices sent in the request");
     }
 
-    votesData.forEach((value) => {
+    values.forEach((value) => {
       if (value.address !== address) {
         throw new Error("Invalid Proposal Body, Invalid Address in choices");
       }
@@ -80,7 +80,7 @@ const updateChoiceById = async (req, response) => {
       }
     });
 
-    const choiceIds = votesData.map((value) => value.choiceId);
+    const choiceIds = values.map((value) => value.choiceId);
     let duplicates = choiceIds.filter(
       (item, index) => choiceIds.indexOf(item.trim()) !== index
     );
@@ -107,7 +107,7 @@ const updateChoiceById = async (req, response) => {
     }
 
     await Promise.all(
-      votesData.map(async (value) => {
+      values.map(async (value) => {
         const { choiceId } = value;
 
         let walletVote = {
@@ -177,7 +177,7 @@ const updateChoiceById = async (req, response) => {
             const mongoClient = dbo.getClient();
             const session = mongoClient.startSession();
 
-            const distributedWeight = total.div(new BigNumber(votesData.length));
+            const distributedWeight = total.div(new BigNumber(values.length));
 
             walletVote.balanceAtReferenceBlock = distributedWeight.toString();
 
@@ -208,7 +208,7 @@ const updateChoiceById = async (req, response) => {
                   i++;
                 })
                 .then((res) => {
-                  if (i === votesData.length) {
+                  if (i === values.length) {
                     // response.json({ success: true });
                   }
                 });
@@ -224,8 +224,8 @@ const updateChoiceById = async (req, response) => {
         } else {
           let newId = { _id: ObjectId(choice._id) };
 
-          if (votesData.length > 1) {
-            const distributedWeight = total.div(new BigNumber(votesData.length));
+          if (values.length > 1) {
+            const distributedWeight = total.div(new BigNumber(values.length));
             walletVote.balanceAtReferenceBlock = distributedWeight.toString();
           }
           let data = {
@@ -239,7 +239,7 @@ const updateChoiceById = async (req, response) => {
 
           j++;
 
-          if (j === votesData.length) {
+          if (j === values.length) {
             // response.json({ success: true });
           } else {
             return;
