@@ -23,7 +23,9 @@
     "cors": "^2.8.5",
     "dotenv": "^16.0.3",
     "express": "^4.18.1",
+    "mime": "^4.0.1",
     "mongodb": "^4.10.0",
+    "nft.storage": "^7.1.1",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.0"
   },
