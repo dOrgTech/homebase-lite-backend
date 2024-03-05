@@ -4,10 +4,13 @@ const express = require("express");
 const dbo = require("../../db/conn");
 const {
   getInputFromSigPayload,
+  getTimestampFromPayloadBytes,
+  getIPFSProofFromPayload,
   getUserTotalVotingPowerAtReferenceBlock,
 } = require("../../utils");
 const { default: BigNumber } = require("bignumber.js");
 const { getPkhfromPk } = require("@taquito/utils");
+const { uploadToIPFS } = require("../../services/ipfs.service");
 
 // This help convert the id from string to ObjectId for the _id.
 const ObjectId = require("mongodb").ObjectId;
@@ -33,13 +36,16 @@ const getChoiceById = async (req, response) => {
 };
 
 const updateChoiceById = async (req, response) => {
-  const { payloadBytes, publicKey } = req.body;
+  const { payloadBytes, publicKey, signature } = req.body;
 
   let j = 0;
   let i = 0;
 
   try {
     const values = getInputFromSigPayload(payloadBytes);
+
+    const payloadDate = getTimestampFromPayloadBytes(payloadBytes);
+
     let db_connect = dbo.getDb("Lite");
 
     const pollID = values[0].pollID;
@@ -105,7 +111,40 @@ const updateChoiceById = async (req, response) => {
     if (total.eq(0)) {
       throw new Error("No balance at proposal level");
     }
+    const isVoted = await db_connect
+      .collection('Choices')
+      .find({
+        pollID: poll._id, 
+        walletAddresses: { $elemMatch: { address: address } },
+      })
+      .toArray();
 
+    if (isVoted.length > 0) {
+      const oldVote = await db_connect.collection("Choices").findOne({
+        _id: ObjectId(isVoted[0].walletAddresses[0].choiceId),
+      });
+
+      const oldSignaturePayload = oldVote.walletAddresses[0].payloadBytes;
+      if (oldSignaturePayload) {
+        const oldSignatureDate =
+          getTimestampFromPayloadBytes(oldSignaturePayload);
+
+        if (payloadDate <= oldSignatureDate) {
+          throw new Error("Invalid Signature");
+        }
+      }
+    }
+
+    const cidLink = await uploadToIPFS(
+      getIPFSProofFromPayload(payloadBytes, signature)
+    );
+    if (!cidLink) {
+      throw new Error(
+        "Could not upload proof to IPFS, Vote was not registered. Please try again later"
+      );
+    }
+
+    // TODO: Optimize this Promise.all
     await Promise.all(
       values.map(async (value) => {
         const { choiceId } = value;
@@ -114,19 +153,15 @@ const updateChoiceById = async (req, response) => {
           address,
           balanceAtReferenceBlock: total.toString(),
           choiceId,
+          payloadBytes,
+          signature,
         };
+
+        walletVote.cidLink = cidLink;
 
         const choice = await db_connect
           .collection("Choices")
           .findOne({ _id: ObjectId(choiceId) });
-
-        const isVoted = await db_connect
-          .collection("Choices")
-          .find({
-            pollID: poll._id,
-            walletAddresses: { $elemMatch: { address: address } },
-          })
-          .toArray();
         if (isVoted.length > 0) {
           if (poll.votingStrategy === 0) {
             const mongoClient = dbo.getClient();
@@ -137,9 +172,6 @@ const updateChoiceById = async (req, response) => {
                 walletAddresses: walletVote,
               },
             };
-            const oldVote = await db_connect.collection("Choices").findOne({
-              _id: ObjectId(isVoted[0].walletAddresses[0].choiceId),
-            });
 
             let remove = {
               $pull: {
@@ -152,6 +184,9 @@ const updateChoiceById = async (req, response) => {
             try {
               await session.withTransaction(async () => {
                 const coll1 = db_connect.collection("Choices");
+                // const coll2 = db_connect.collection("Polls");
+
+                
                 // Important:: You must pass the session to the operations
                 await coll1.updateOne(
                   { _id: ObjectId(oldVote._id) },
