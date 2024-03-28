@@ -292,6 +292,7 @@ const updateChoiceById = async (req, response) => {
   }
 };
 
+// Get the user's choice
 const choicesByUser = async (req, response) => {
   const { id } = req.params.id;
 
