@@ -148,11 +148,11 @@ const addPoll = async (req, response) => {
       return element._id;
     });
 
-    const pollExists = await db_connect
+    const doesPollExists = await db_connect
       .collection("Polls")
       .findOne({ payloadBytes });
 
-    if (pollExists) {
+    if (doesPollExists) {
       throw new Error("Invalid Signature, Poll already exists");
     }
 

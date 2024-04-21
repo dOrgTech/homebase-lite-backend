@@ -72,11 +72,7 @@ const getUserBalanceAtLevel = async (
   return new BigNumber(0);
 };
 
-const getUserXTZBalanceAtLevel = async (
-  network,
-  level,
-  userAddress
-) => {
+const getUserXTZBalanceAtLevel = async (network, level, userAddress) => {
   const url = `https://api.${network}.tzkt.io/v1/accounts/${userAddress}/balance_history/${level}`;
   const response = await axios({ url, method: "GET" });
 
@@ -129,47 +125,57 @@ const getUserTotalVotingPowerAtReferenceBlock = async (
   daoContract,
   tokenID,
   level,
-  userAddress
+  userAddress,
+  isXTZ = false
 ) => {
   let userVotingPower = new BigNumber(0);
-
-  const isTokenDelegation = await isTokenDelegationSupported(network, address);
-
-  if (isTokenDelegation) {
-    const userVotePower = await getUserTotalVotingWeightAtBlock(
+  if (!isXTZ) {
+    const isTokenDelegation = await isTokenDelegationSupported(
       network,
-      address,
-      level,
-      userAddress
+      address
     );
-    if (!userVotePower) {
-      throw new Error("Could Not get voting weight");
-    }
-    userVotingPower = userVotingPower.plus(userVotePower);
-  } else {
-    const selfBalance = await getUserBalanceAtLevel(
-      network,
-      address,
-      tokenID,
-      level,
-      userAddress
-    );
-    userVotingPower = userVotingPower.plus(selfBalance);
-
-    if (daoContract) {
-      const userDAODepositBalance = await getUserDAODepositBalanceAtLevel(
-        userAddress,
+    if (isTokenDelegation) {
+      const userVotePower = await getUserTotalVotingWeightAtBlock(
         network,
-        daoContract,
-        level
+        address,
+        level,
+        userAddress
       );
-      userVotingPower = userVotingPower.plus(userDAODepositBalance);
+      if (!userVotePower) {
+        throw new Error("Could Not get voting weight");
+      }
+      userVotingPower = userVotingPower.plus(userVotePower);
+    } else {
+      const selfBalance = await getUserBalanceAtLevel(
+        network,
+        address,
+        tokenID,
+        level,
+        userAddress
+      );
+      userVotingPower = userVotingPower.plus(selfBalance);
+
+      if (daoContract) {
+        const userDAODepositBalance = await getUserDAODepositBalanceAtLevel(
+          userAddress,
+          network,
+          daoContract,
+          level
+        );
+        userVotingPower = userVotingPower.plus(userDAODepositBalance);
+      }
     }
+
+    return userVotingPower;
+  } else {
+    const selfBalance = await getUserXTZBalanceAtLevel(
+      network,
+      level,
+      userAddress
+    );
+    return userVotingPower.plus(selfBalance);
   }
-
-  return userVotingPower;
 };
-
 
 const isTokenDelegationSupported = async (network, address) => {
   const tezos = new TezosToolkit(rpcNodes[network]);

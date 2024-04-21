@@ -5,6 +5,7 @@
   "main": "./server.js",
   "scripts": {
     "test": "jest",
+    "start":"node ./server.js",
     "dev": "nodemon ./server.js"
   },
   "jest": {
@@ -33,6 +34,7 @@
     "jest": "^29.7.0",
     "jest-mock": "^29.7.0",
     "mongodb-memory-server": "^9.1.4",
+    "nodemon": "^3.1.0",
     "supertest": "^6.3.3"
   }
 }

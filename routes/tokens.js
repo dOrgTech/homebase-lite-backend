@@ -1,4 +1,5 @@
 const express = require("express");
+const {catchAsync} = require("../services/response.util");
 
 // recordRoutes is an instance of the express router.
 // We use it to define our routes.
@@ -87,6 +88,6 @@ tokensRoutes.route("/token/:id").get(getTokenById);
  */
 tokensRoutes
   .route("/network/:network/token/:address/token-id/:tokenID/voting-power")
-  .get(getVotingPowerAtLevel);
+  .get(catchAsync(getVotingPowerAtLevel));
 
 module.exports = tokensRoutes;
