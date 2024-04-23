@@ -6,7 +6,10 @@ const {
   getCurrentBlock,
   getTotalSupplyAtCurrentBlock,
   getUserTotalVotingPowerAtReferenceBlock,
+  getIPFSProofFromPayload,
 } = require("../../utils");
+
+const { uploadToIPFS } = require("../../services/ipfs.service");
 
 const ObjectId = require("mongodb").ObjectId;
 
@@ -49,7 +52,7 @@ const getPollsById = async (req, response) => {
 };
 
 const addPoll = async (req, response) => {
-  const { payloadBytes, publicKey } = req.body;
+  const { payloadBytes, publicKey, signature } = req.body;
 
   try {
     const values = getInputFromSigPayload(payloadBytes);
@@ -141,10 +144,28 @@ const addPoll = async (req, response) => {
         _id: ObjectId(),
       };
     });
-
     const choicesPoll = choicesData.map((element) => {
       return element._id;
     });
+
+    const doesPollExists = await db_connect
+      .collection("Polls")
+      .findOne({ payloadBytes });
+
+    if (doesPollExists) {
+      throw new Error("Invalid Signature, Poll already exists");
+    }
+
+    const cidLink = await uploadToIPFS(
+      getIPFSProofFromPayload(payloadBytes, signature)
+    );
+    if (!cidLink) {
+      throw new Error(
+        "Could not upload proof to IPFS, Vote was not registered. Please try again later"
+      );
+    }
+    
+  
 
     let PollData = {
       name,
@@ -159,7 +180,10 @@ const addPoll = async (req, response) => {
       choices: choicesPoll,
       author,
       votingStrategy,
-      isXTZ
+      isXTZ,
+      payloadBytes,
+      signature,
+      cidLink
     };
 
     let data = {
