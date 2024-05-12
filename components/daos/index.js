@@ -9,7 +9,6 @@ const {
 } = require("../../utils");
 
 const dbo = require("../../db/conn");
-const { response } = require("express");
 const { getPkhfromPk } = require("@taquito/utils");
 
 const getAllLiteOnlyDAOs = async (req, response) => {

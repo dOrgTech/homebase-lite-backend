@@ -17,6 +17,8 @@ const catchAsync = (fn) => (req, res, next) => {
         let responseStatusCode = 500;
         if (err.statusCode) responseStatusCode = err.statusCode
 
+        if(errMessage.includes("InvalidContractAddressError")) responseStatusCode = 400
+
         try {
             errMessage = JSON.parse(errMessage)
             errMessage = errMessage.map(ex => ex.message).join(",")
