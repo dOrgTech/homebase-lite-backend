@@ -7,7 +7,7 @@ const networkNameMap = {
 
 const rpcNodes = {
   mainnet: "https://mainnet.api.tez.ie",
-  ghostnet: "https://ghostnet.tezos.marigold.dev",
+  ghostnet: "https://ghostnet.smartpy.io",
 };
 
 const getTokenMetadata = async (contractAddress, network, tokenId) => {
