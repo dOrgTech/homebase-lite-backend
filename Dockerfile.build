@@ -1,0 +1,17 @@
+FROM heroku/heroku:22-build
+
+WORKDIR /opt
+
+RUN curl https://buildpack-registry.s3.amazonaws.com/buildpacks/heroku/nodejs.tgz | tar -xz
+
+WORKDIR /app
+
+COPY . . 
+
+WORKDIR /opt
+
+RUN ./bin/compile /app /tmp/build-cache /tmp/env
+
+EXPOSE 5000
+
+CMD ["npm", "start"]
