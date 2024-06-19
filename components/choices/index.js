@@ -42,6 +42,7 @@ const updateChoiceById = async (req, response) => {
   let i = 0;
 
   try {
+    let oldVote = null;
     const values = getInputFromSigPayload(payloadBytes);
 
     const payloadDate = getTimestampFromPayloadBytes(payloadBytes);
@@ -119,12 +120,14 @@ const updateChoiceById = async (req, response) => {
       })
       .toArray();
 
+
     if (isVoted.length > 0) {
-      const oldVote = await db_connect.collection("Choices").findOne({
-        _id: ObjectId(isVoted[0].walletAddresses[0].choiceId),
+      const oldVoteObj = isVoted[0].walletAddresses.find(x => x.address === address);
+      oldVote = await db_connect.collection("Choices").findOne({
+        _id: ObjectId(oldVoteObj.choiceId),
       });
 
-      const oldSignaturePayload = oldVote.walletAddresses[0].payloadBytes;
+      const oldSignaturePayload = oldVote.walletAddresses[0].payloadBytes
       if (oldSignaturePayload) {
         const oldSignatureDate =
           getTimestampFromPayloadBytes(oldSignaturePayload);
@@ -191,12 +194,14 @@ const updateChoiceById = async (req, response) => {
 
 
                 // Important:: You must pass the session to the operations
-                await coll1.updateOne(
-                  { _id: ObjectId(oldVote._id) },
-                  remove,
-                  { remove: true },
-                  { session }
-                );
+                if (oldVote) {
+                  await coll1.updateOne(
+                    { _id: ObjectId(oldVote._id) },
+                    remove,
+                    { remove: true },
+                    { session }
+                  );
+                }
 
                 await coll1.updateOne({ _id: ObjectId(choice._id) }, newData, {
                   session,
