@@ -156,14 +156,14 @@ const addPoll = async (req, response) => {
       throw new Error("Invalid Signature, Poll already exists");
     }
 
-    const cidLink = await uploadToIPFS(
-      getIPFSProofFromPayload(payloadBytes, signature)
-    );
-    if (!cidLink) {
-      throw new Error(
-        "Could not upload proof to IPFS, Vote was not registered. Please try again later"
-      );
-    }
+    // const cidLink = await uploadToIPFS(
+    //   getIPFSProofFromPayload(payloadBytes, signature)
+    // );
+    // if (!cidLink) {
+    //   throw new Error(
+    //     "Could not upload proof to IPFS, Vote was not registered. Please try again later"
+    //   );
+    // }
     
   
 
@@ -183,7 +183,7 @@ const addPoll = async (req, response) => {
       isXTZ,
       payloadBytes,
       signature,
-      cidLink
+      cidLink:""
     };
 
     let data = {
