@@ -1,5 +1,5 @@
 const ObjectId = require("mongodb").ObjectId;
-
+const mongoose = require("mongoose");
 const { getTokenMetadata } = require("../../services");
 const {
   getInputFromSigPayload,
@@ -7,13 +7,44 @@ const {
   getUserBalanceAtLevel,
   getTokenHoldersCount,
 } = require("../../utils");
+const {
+  getEthTokenMetadata,
+  getEthCurrentBlock,
+  getEthUserBalanceAtLevel,
+} = require("../../utils-eth");
 
 const dbo = require("../../db/conn");
-const { response } = require("express");
 const { getPkhfromPk } = require("@taquito/utils");
+const DaoModel = require("../../db/models/Dao.model");
+const TokenModel = require("../../db/models/Token.model");
 
 const getAllLiteOnlyDAOs = async (req, response) => {
-  const { network } = req.body;
+  const network = req.body?.network || req.query.network;
+
+  // Implementation with Mongoose with go live with Etherlink
+  if(req.method === 'GET'){
+    const sortOrder = req.query.order || "desc";
+    const allDaos = await DaoModel.find({network}).sort({
+      _id: sortOrder
+    }).lean();
+    
+    const allDaoIds = allDaos.map(dao => new mongoose.Types.ObjectId(dao._id));
+
+    const allTokens = await TokenModel.find({daoID: {$in: allDaoIds}}).lean();
+    // console.log('All Tokens DAO', [...new Set(allTokens.map(token => token.daoID))])
+    // console.log('Found Tokens',allDaoIds, allTokens.length)
+
+    const results = allDaos.map(dao => {
+      const token = allTokens.find(token => token.daoID.toString() === dao._id.toString());
+      // console.log('Token', token)
+      return {
+        ...dao,
+        ...token
+      }
+    });
+
+    return response.json(results);
+  }
 
   try {
     let db_connect = dbo.getDb();
@@ -169,8 +200,105 @@ const updateTotalHolders = async (req, response) => {
 };
 
 const createDAO = async (req, response) => {
-  const { payloadBytes, publicKey } = req.body;
+  const { payloadBytes, publicKey,  } = req.body;
+  const network = req.body.network
+  if(network && network?.startsWith("etherlink")) {
+    const payload = req.payloadObj;
+    const {
+      tokenAddress,
+      tokenID,
+      symbol:tokenSymbol,
+      network,
+      name,
+      description,
+      linkToTerms,
+      picUri,
+      requiredTokenOwnership,
+      allowPublicAccess,
+      daoContract,
+    } = payload;
 
+    // return response.json({
+    //   payload,
+    //   body:{
+    //     ...req.body,
+    //   }
+    // })
+
+    // const tokenData = await getEthTokenMetadata(tokenAddress, network, tokenID);
+    // console.log({tokenData})
+    const address = publicKey
+
+    const block = await getEthCurrentBlock(network);
+    console.log({block})
+    const userBalanceAtCurrentLevel = await getEthUserBalanceAtLevel(
+      network,
+      address,
+      tokenAddress,
+      block,
+    );
+    console.log({userBalanceAtCurrentLevel})
+
+    // if (userBalanceAtCurrentLevel.eq(0)) {
+    //   throw new Error("User does not have balance for this DAO token");
+    // }
+
+    const ethDaoData = {
+      name,
+      description,
+      linkToTerms,
+      picUri,
+      members: [address],
+      polls: [],
+      tokenAddress,
+      tokenType: "ERC20",
+      requiredTokenOwnership,
+      allowPublicAccess,
+      network,
+      daoContract,
+      votingAddressesCount: 0,
+    };
+
+    console.log({ethDaoData})
+    const createdDao = await DaoModel.create(ethDaoData);
+    const createdToken = await TokenModel.create({
+      tokenAddress,
+      tokenType: "ERC20",
+      symbol: tokenSymbol,
+      daoID: createdDao._id,
+      decimals: Number(2),
+      // decimals: Number(tokenData.tokenDecimals),
+    });
+    return response.json({
+      dao: createdDao,
+      token: createdToken
+    })
+    // const session = await mongoose.startSession();
+    // try {
+    //   await session.withTransaction(async () => {
+    //     const createdDao = await DaoModel.create(ethDaoData, { session });
+    //     const createdToken = await TokenModel.create({
+    //       tokenAddress,
+    //       tokenType: "ERC20",
+    //       symbol: tokenSymbol,
+    //       daoID: createdDao._id,
+    //       decimals: Number(2),
+    //       // decimals: Number(tokenData.tokenDecimals),
+    //     }, { session });
+    //     res.json({
+    //       dao: createdDao,
+    //       token: createdToken
+    //     })
+    //   });
+    // } catch (error) {
+    //   console.error('Transaction failed:', error);
+    //   return response.json({
+    //     message: "Etherlink DAOs are not supported yet"
+    //   })
+    // } finally {
+    //   session.endSession();
+    // }
+  }
   try {
     const values = getInputFromSigPayload(payloadBytes);
     const {

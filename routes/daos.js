@@ -80,7 +80,7 @@ daoRoutes.route("/dao/add").all(requireSignature).post(createDAO);
  *       500:
  *         description: Invalid signature payload
  */
-daoRoutes.route("/daos").post(getAllLiteOnlyDAOs);
+daoRoutes.route("/daos").all(getAllLiteOnlyDAOs);
 /**
  * @swagger
  * /daos/contracts/{daoContract}:
