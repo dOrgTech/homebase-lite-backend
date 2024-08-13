@@ -322,11 +322,13 @@ const tokenAbiForErc20 = [
     }
 ]
 
+// ⚠️ To be Fixed
 function _getEthProvider(network) {
   return new JsonRpcProvider("https://node.ghostnet.etherlink.com");
 //   return new JsonRpcProvider("https://eth-sepolia.blockscout.com");
 }
 
+// ⚠️ To be Implemented
 function verityEthSignture(signature, payloadBytes) {
 
   return true;
@@ -355,6 +357,7 @@ function verityEthSignture(signature, payloadBytes) {
   }
 }
 
+// ⚠️ To be Implemented
 async function getEthTokenMetadata(network, tokenAddress) {
   const provider = _getEthProvider(network);
   const tokenContract = new ethers.Contract(tokenAddress, tokenAbiForErc20, provider);
@@ -369,12 +372,14 @@ async function getEthTokenMetadata(network, tokenAddress) {
   };
 }
 
+// ✅ Working
 async function getEthCurrentBlock(network) {
   const provider = _getEthProvider(network);
   const block = await provider.getBlock('latest');
   return block.number;
 }
 
+// ✅ Working
 async function getEthUserBalanceAtLevel(network, walletAddress, tokenAddress, block = 0) {
     if(!block) block = await getEthCurrentBlock(network);
     const provider = _getEthProvider(network);
@@ -384,11 +389,58 @@ async function getEthUserBalanceAtLevel(network, walletAddress, tokenAddress, bl
     return balance;
 }
 
-// ✅ Working
-getEthUserBalanceAtLevel("sepoplia","0xA0E9D286a88C544C8b474275de4d1b8D97C2a81a","0x336bfd0356f6babec084f9120901c0296db1967e").then(console.log)
+async function getEthTotalSupply(network, tokenAddress, block = 0) {
+    if(!block) block = await getEthCurrentBlock(network);
+    const provider = _getEthProvider(network);
+    const tokenContract = new ethers.Contract(tokenAddress, tokenAbiForErc20, provider);
+    const totalSupply = await tokenContract.totalSupply({blockTag: block});
+    return totalSupply;
+}
+
+// This won't work efficiently for large block ranges, Indexer needs to be used for this
+async function getEthTokenHoldersCount(network, tokenAddress, block = 0) {
+    if(!block) block = await getEthCurrentBlock(network);
+    const provider = _getEthProvider(network);
+    const contract = new ethers.Contract(tokenAddress, tokenAbiForErc20, provider);
+   
+    const latestBlock = await provider.getBlockNumber();
+    const startBlock = Math.max(0, latestBlock - 999);  // Ensure we don't go below block 0
+    const holders = new Set();
+   
+    console.log(`Querying blocks ${startBlock} to ${latestBlock}`);
+
+    const filter = contract.filters.Transfer();
+    const events = await contract.queryFilter(filter, startBlock, latestBlock);
+
+    for (let event of events) {
+        const { from, to } = event.args;
+        holders.add(from);
+        holders.add(to);
+    }
+
+    // Remove zero-balance holders
+    for (let holder of holders) {
+        const balance = await contract.balanceOf(holder);
+        if (balance.eq(0)) {
+            holders.delete(holder);
+        }
+    }
+
+    return holders.size;
+}
+
+getEthTokenHoldersCount("sepolia","0x336bfd0356f6babec084f9120901c0296db1967e").then(console.log)
 
 // ✅ Working
-getEthCurrentBlock("sepolia").then(console.log)
+// getEthTotalSupply("sepoplia","0x336bfd0356f6babec084f9120901c0296db1967e").then((x)=>console.log("Total Suplpy",x))
+
+
+// ✅ Working
+// getEthUserBalanceAtLevel("sepoplia","0xA0E9D286a88C544C8b474275de4d1b8D97C2a81a","0x336bfd0356f6babec084f9120901c0296db1967e").then(console.log)
+
+
+// ✅ Working
+// getEthCurrentBlock("sepolia").then(console.log)
 
 console.log("from ETH")
 
@@ -396,5 +448,7 @@ module.exports = {
   verityEthSignture,
   getEthTokenMetadata,
   getEthCurrentBlock,
-  getEthUserBalanceAtLevel
+  getEthUserBalanceAtLevel,
+  getEthTotalSupply,
+  getEthTokenHoldersCount,
 }

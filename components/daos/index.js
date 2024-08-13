@@ -8,7 +8,7 @@ const {
   getTokenHoldersCount,
 } = require("../../utils");
 const {
-  getEthTokenMetadata,
+  getEthTokenHoldersCount,
   getEthCurrentBlock,
   getEthUserBalanceAtLevel,
 } = require("../../utils-eth");
@@ -22,22 +22,24 @@ const getAllLiteOnlyDAOs = async (req, response) => {
   const network = req.body?.network || req.query.network;
 
   // Implementation with Mongoose with go live with Etherlink
-  if(req.method === 'GET'){
+  if (req.method === 'GET') {
     const sortOrder = req.query.order || "desc";
-    const allDaos = await DaoModel.find({network}).sort({
+    const allDaos = await DaoModel.find({ network }).sort({
       _id: sortOrder
     }).lean();
-    
+
     const allDaoIds = allDaos.map(dao => new mongoose.Types.ObjectId(dao._id));
 
-    const allTokens = await TokenModel.find({daoID: {$in: allDaoIds}}).lean();
+    const allTokens = await TokenModel.find({ daoID: { $in: allDaoIds } }).lean();
     // console.log('All Tokens DAO', [...new Set(allTokens.map(token => token.daoID))])
     // console.log('Found Tokens',allDaoIds, allTokens.length)
 
     const results = allDaos.map(dao => {
       const token = allTokens.find(token => token.daoID.toString() === dao._id.toString());
+      if (token) delete token._id;
       // console.log('Token', token)
       return {
+        _id: dao._id,
         ...dao,
         ...token
       }
@@ -116,6 +118,11 @@ const getDAOFromContractAddress = async (req, response) => {
 
 const getDAOById = async (req, response) => {
   const { id } = req.params;
+  const daoDao = await DaoModel.findById(id);
+  console.log({ id, daoDao })
+  if (daoDao) {
+    return response.json(daoDao);
+  }
 
   try {
     let db_connect = dbo.getDb();
@@ -150,12 +157,19 @@ const updateTotalCount = async (req, response) => {
     if (!token) {
       throw new Error("DAO Token Does not exist in system");
     }
-
-    const count = await getTokenHoldersCount(
-      dao.network,
-      token.tokenAddress,
-      token.tokenID
-    );
+    let count = 0;
+    if (dao.network?.startsWith("etherlink")) {
+      count = await getEthTokenHoldersCount(
+        dao.network,
+        token.tokenAddress,
+      );
+    } else {
+      count = await getTokenHoldersCount(
+        dao.network,
+        token.tokenAddress,
+        token.tokenID
+      );
+    }
 
     let data = {
       $set: {
@@ -200,14 +214,14 @@ const updateTotalHolders = async (req, response) => {
 };
 
 const createDAO = async (req, response) => {
-  const { payloadBytes, publicKey,  } = req.body;
+  const { payloadBytes, publicKey, } = req.body;
   const network = req.body.network
-  if(network && network?.startsWith("etherlink")) {
+  if (network && network?.startsWith("etherlink")) {
     const payload = req.payloadObj;
     const {
       tokenAddress,
       tokenID,
-      symbol:tokenSymbol,
+      symbol: tokenSymbol,
       network,
       name,
       description,
@@ -230,14 +244,14 @@ const createDAO = async (req, response) => {
     const address = publicKey
 
     const block = await getEthCurrentBlock(network);
-    console.log({block})
+    console.log({ block })
     const userBalanceAtCurrentLevel = await getEthUserBalanceAtLevel(
       network,
       address,
       tokenAddress,
       block,
     );
-    console.log({userBalanceAtCurrentLevel})
+    console.log({ userBalanceAtCurrentLevel })
 
     // if (userBalanceAtCurrentLevel.eq(0)) {
     //   throw new Error("User does not have balance for this DAO token");
@@ -259,7 +273,7 @@ const createDAO = async (req, response) => {
       votingAddressesCount: 0,
     };
 
-    console.log({ethDaoData})
+    console.log({ ethDaoData })
     const createdDao = await DaoModel.create(ethDaoData);
     const createdToken = await TokenModel.create({
       tokenAddress,

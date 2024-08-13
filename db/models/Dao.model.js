@@ -19,6 +19,10 @@ const DaoModelSchema = new Schema({
     type: String,
     default: '',
   },
+  // Contract Address of deployed DAO
+  daoContract:{
+    type:String,
+  },
   linkToTerms: {
     type: String,
     default: '',

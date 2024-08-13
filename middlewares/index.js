@@ -2,16 +2,29 @@ const { verifySignature, bytes2Char } = require("@taquito/utils");
 const { verityEthSignture } = require("../utils-eth");
 
 function splitAtBrace(inputString) {
+  const squareBracketIndex = inputString.indexOf('[');
   const braceIndex = inputString.indexOf('{');
   
-  if (braceIndex === -1) {
+   // Find the minimum between square bracket and brace indices, but > 0
+   let minIndex = -1;
+   if (squareBracketIndex > 0 && braceIndex > 0) {
+     minIndex = Math.min(squareBracketIndex, braceIndex);
+   } else if (squareBracketIndex > 0) {
+     minIndex = squareBracketIndex;
+   } else if (braceIndex > 0) {
+     minIndex = braceIndex;
+   }
+  
+   
+  if (minIndex === -1) {
     // If '{' is not found, return the original string and an empty string
     return [inputString, ''];
   }
-  
+
+ 
   // Split the string at the brace position
-  const firstPart = inputString.slice(0, braceIndex);
-  const secondPart = inputString.slice(braceIndex);
+  const firstPart = inputString.slice(0, minIndex);
+  const secondPart = inputString.slice(minIndex);
   
   return [firstPart, secondPart];
 }
@@ -25,7 +38,7 @@ const requireSignature = async (request, response, next) => {
       const isVerified = verityEthSignture(signature, payloadBytes)
       if(isVerified){
         try{
-        const [firstPart, secondPart] = splitAtBrace(payloadBytes)
+        const [_, secondPart] = splitAtBrace(payloadBytes)
         const jsonString = secondPart
         console.log({jsonString, secondPart})
         const payloadObj = JSON.parse(jsonString)

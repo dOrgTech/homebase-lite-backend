@@ -13,7 +13,7 @@ const TokenModelSchema = new Schema({
     },
     symbol: {
         type: String,
-        required: true,
+        required: false,
     },
     tokenID: {
         type: Number
