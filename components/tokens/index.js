@@ -1,6 +1,8 @@
 // This will help us connect to the database
 const dbo = require("../../db/conn");
+const TokenModel = require("../../db/models/Token.model");
 const { getUserTotalVotingPowerAtReferenceBlock } = require("../../utils");
+const { getEthTokenMetadata } = require("../../utils-eth");
 
 const ObjectId = require("mongodb").ObjectId;
 
@@ -33,11 +35,7 @@ const getTokenById = async (req, response) => {
   const { id } = req.params;
 
   try {
-    let db_connect = dbo.getDb();
-    const TokensCollection = db_connect.collection("Tokens");
-
-    let daoId = { daoID: ObjectId(id) };
-    const result = await TokensCollection.findOne(daoId);
+    const result = await TokenModel.findOne({daoId: ObjectId(id)})
     response.json(result);
   } catch (error) {
     console.log("error: ", error);
@@ -98,8 +96,15 @@ const getVotingPowerAtLevel = async (req, response) => {
   }
 };
 
+const getTokenByContract = async (req, response) => {
+  const { network, contract } = req.query;
+  const token = await getEthTokenMetadata(network, contract);
+  response.json([token]);
+}
+
 module.exports = {
   addToken,
   getTokenById,
   getVotingPowerAtLevel,
+  getTokenByContract
 };
