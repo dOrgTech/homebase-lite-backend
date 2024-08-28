@@ -323,12 +323,43 @@ const tokenAbiForErc20 = [
     }
 ]
 
-// ⚠️ To be Fixed
 function _getEthProvider(network) {
-    return new JsonRpcProvider("https://node.ghostnet.etherlink.com");
-    //   return new JsonRpcProvider("https://eth-sepolia.blockscout.com");
+    const rpcEndpoint = network.includes("test") ? "https://node.ghostnet.etherlink.com" : "https://node.mainnet.etherlink.com";
+    return new JsonRpcProvider(rpcEndpoint);
 }
 
+function _getEthRestEndpoint(network) {
+    const rpcEndpoint = network.includes("test") ? "https://testnet.explorer.etherlink.com/api/v2" : "https://node.mainnet.etherlink.com";
+    return rpcEndpoint;
+}
+
+async function _getEthTokenMetadataWithRpc(network, tokenAddress) {
+    const provider = _getEthProvider(network);
+    const tokenContract = new ethers.Contract(tokenAddress, tokenAbiForErc20, provider);
+    const symbol = await tokenContract.symbol();
+    const decimals = await tokenContract.decimals();
+    const name = await tokenContract.name();
+    const totalSupply = await tokenContract.totalSupply();
+    return {
+        name,
+        decimals: Number(decimals),
+        symbol,
+        totalSupply: BigNumber(totalSupply).toString(),
+    };
+}
+
+async function _getEthTokenMetadataWithRest(network, tokenAddress) {
+    const url = _getEthRestEndpoint(network)
+    const response = await fetch(`${url}/tokens/${tokenAddress}`)
+    const data = await response.json()
+    return {
+        name: data?.name,
+        decimals: data?.decimals,
+        symbol: data?.symbol,
+        totalSupply: data?.total_supply,
+        holders: data?.holders,
+    }
+}
 // ⚠️ To be Implemented
 function verityEthSignture(signature, payloadBytes) {
 
@@ -360,19 +391,7 @@ function verityEthSignture(signature, payloadBytes) {
 
 // ✅ Working
 async function getEthTokenMetadata(network, tokenAddress) {
-    const provider = _getEthProvider(network);
-    const tokenContract = new ethers.Contract(tokenAddress, tokenAbiForErc20, provider);
-    const symbol = await tokenContract.symbol();
-    const decimals = await tokenContract.decimals();
-    const name = await tokenContract.name();
-    const totalSupply = await tokenContract.totalSupply();
-
-    return {
-        name,
-        decimals: Number(decimals),
-        symbol,
-        totalSupply: BigNumber(totalSupply).toString(),
-    };
+    return await _getEthTokenMetadataWithRest(network, tokenAddress)
 }
 
 // ✅ Working
@@ -432,9 +451,9 @@ async function getEthTokenHoldersCount(network, tokenAddress, block = 0) {
     return holders.size;
 }
 
-getEthTokenMetadata("sepolia", "0x336bfd0356f6babec084f9120901c0296db1967e").then(console.log)
+// getEthTokenMetadata("etherlink_testnet", "0x336bfd0356f6babec084f9120901c0296db1967e").then(console.log)
 
-// getEthTokenHoldersCount("sepolia","0x336bfd0356f6babec084f9120901c0296db1967e").then(console.log)
+// getEthTokenHoldersCount("etherlink_testnet","0x336bfd0356f6babec084f9120901c0296db1967e").then(console.log)
 
 // ✅ Working
 // getEthTotalSupply("sepoplia","0x336bfd0356f6babec084f9120901c0296db1967e").then((x)=>console.log("Total Suplpy",x))
@@ -445,7 +464,7 @@ getEthTokenMetadata("sepolia", "0x336bfd0356f6babec084f9120901c0296db1967e").the
 
 
 // ✅ Working
-// getEthCurrentBlock("sepolia").then(console.log)
+// getEthCurrentBlock("etherlink_testnet").then(console.log)
 
 console.log("from ETH")
 

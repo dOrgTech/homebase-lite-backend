@@ -30,7 +30,6 @@ const getAllLiteOnlyDAOs = async (req, response) => {
     }).lean();
 
     const allDaoIds = allDaos.map(dao => new mongoose.Types.ObjectId(dao._id));
-
     const allTokens = await TokenModel.find({ daoID: { $in: allDaoIds } }).lean();
     // console.log('All Tokens DAO', [...new Set(allTokens.map(token => token.daoID))])
     // console.log('Found Tokens',allDaoIds, allTokens.length)
@@ -164,6 +163,7 @@ const updateTotalCount = async (req, response) => {
         dao.network,
         token.tokenAddress,
       );
+      console.log(`Token holder count for ${token.tokenAddress} is ${count}`)
     } else {
       count = await getTokenHoldersCount(
         dao.network,

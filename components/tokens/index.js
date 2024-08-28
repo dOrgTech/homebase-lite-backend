@@ -1,11 +1,13 @@
 // This will help us connect to the database
+const mongoose = require("mongoose");
+const mongodb = require("mongodb");
 const dbo = require("../../db/conn");
 const TokenModel = require("../../db/models/Token.model");
+const DAOModel = require("../../db/models/Dao.model");
 const { getUserTotalVotingPowerAtReferenceBlock } = require("../../utils");
 const { getEthTokenMetadata } = require("../../utils-eth");
 
-const ObjectId = require("mongodb").ObjectId;
-
+const ObjectId = mongodb.ObjectId;
 const addToken = async (req, response) => {
   const { daoID, tokenID, symbol, tokenAddress } = req.body;
 
@@ -35,7 +37,16 @@ const getTokenById = async (req, response) => {
   const { id } = req.params;
 
   try {
-    const result = await TokenModel.findOne({daoId: ObjectId(id)})
+    const result = await TokenModel.findOne({daoID: id}).lean()
+    if(result.tokenType === "ERC20") {
+      const linkedDao = await DAOModel.findById(result.daoID)
+      const tokenMeta = await getEthTokenMetadata(linkedDao?.network, result.tokenAddress)
+      if(tokenMeta) {
+        result.holders = tokenMeta?.holders
+      }else{
+        console.log(tokenMeta, linkedDao.address, result.tokenAddress)
+      }
+    }
     response.json(result);
   } catch (error) {
     console.log("error: ", error);
