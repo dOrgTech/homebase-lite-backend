@@ -222,6 +222,17 @@ const getIPFSProofFromPayload = (payloadBytes, signature) => {
   );
 };
 
+// getUserTotalVotingPowerAtReferenceBlock(
+//   "ghostnet",
+//   "KT1E7jkyAWhCoMbPZbVUJMo7xAfKcqYyCG6Z",
+//   null,
+//   "0",
+//   "tz1egScqJ6F4MvjDQsqLfa3rvCZctcbh9srw",
+//   false
+// ).then((res)=>{
+//   console.log("getUserTotalVotingPowerAtReferenceBlock: ", res);
+// })
+
 module.exports = {
   getInputFromSigPayload,
   getTotalSupplyAtCurrentBlock,

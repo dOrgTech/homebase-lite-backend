@@ -10,6 +10,7 @@ const {
   addToken,
   getTokenById,
   getVotingPowerAtLevel,
+  getTokenByContract,
 } = require("../components/tokens");
 
 /**
@@ -89,5 +90,7 @@ tokensRoutes.route("/token/:id").get(getTokenById);
 tokensRoutes
   .route("/network/:network/token/:address/token-id/:tokenID/voting-power")
   .get(catchAsync(getVotingPowerAtLevel));
+
+tokensRoutes.route("/token").get(catchAsync(getTokenByContract));
 
 module.exports = tokensRoutes;

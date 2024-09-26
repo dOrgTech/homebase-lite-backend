@@ -1,5 +1,6 @@
 const express = require("express");
 const cors = require("cors");
+const mongoose = require('mongoose');
 
 require("dotenv").config({ path: "./config.env" });
 
@@ -36,3 +37,28 @@ app.listen(port, async () => {
 
   console.log(`Server is running on port: ${port}`);
 });
+
+function getMongoDBDatabaseName(url) {
+  const dbNameMatch = url.match(/\/([^/?]+)(\?|$)/);
+  return dbNameMatch ? dbNameMatch[1] : null;
+}
+
+const connectToMongoDB = async () => {
+  try {
+    let connUrl = process.env.ATLAS_URI;
+    const database = getMongoDBDatabaseName(connUrl);
+    if (!database) {
+      const urlParts = connUrl.split('?');
+      connUrl = `${urlParts[0]}Lite?${urlParts[1] || ''}`;
+    }
+    console.log(connUrl);
+    await mongoose.connect(connUrl);
+    console.log('Connected to MongoDB using Mongoose');
+  } catch (error) {
+    console.error('Error connecting to MongoDB:', error);
+    process.exit(1);
+  }
+};
+
+// Call the function to connect to MongoDB
+connectToMongoDB();
