@@ -26,6 +26,7 @@ app.use(require("./routes/daos"));
 app.use(require("./routes/polls"));
 app.use(require("./routes/tokens"));
 app.use(require("./routes/choices"));
+app.use(require("./routes/aci"));
 
 app.listen(port, async () => {
   // perform a database connection when server starts
