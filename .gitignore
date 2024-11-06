@@ -30,3 +30,4 @@ yarn-error.log*
 .idea
 .cosine
 yarn.lock
+bun.lockb

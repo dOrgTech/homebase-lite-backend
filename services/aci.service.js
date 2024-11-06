@@ -1,4 +1,3 @@
-const axios = require("axios");
 const TezosToolkit = require('@taquito/taquito').TezosToolkit;
 const { Schema } = require('@taquito/michelson-encoder');
 
@@ -9,7 +8,7 @@ const networkNameMap = {
 
 const rpcNodes = {
     mainnet: "https://mainnet.api.tez.ie",
-    ghostnet: "https://ghostnet.tezos.marigold.dev",
+    ghostnet: "https://ghostnet.smartpy.io",
 };
 
 function getFieldName(id) {
