@@ -31,3 +31,5 @@ yarn-error.log*
 .cosine
 yarn.lock
 bun.lockb
+test.js
+.vscode
