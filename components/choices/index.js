@@ -15,6 +15,7 @@ const DAOModel = require("../../db/models/Dao.model");
 const TokenModel = require("../../db/models/Token.model");
 const PollModel = require("../../db/models/Poll.model");
 const ChoiceModel = require("../../db/models/Choice.model");
+const { getEthUserBalanceAtLevel } = require("../../utils-eth");
 
 // This help convert the id from string to ObjectId for the _id.
 const ObjectId = require("mongodb").ObjectId;
@@ -82,24 +83,17 @@ const updateChoiceById = async (req, response) => {
       );
       if (duplicates.length > 0) throw new Error("Duplicate choices found");
 
-      // TODO: Check if the user has enough balance to vote
-      // const total = await getUserTotalVotingPowerAtReferenceBlock(
-      //   dao.network,
-      //   dao.tokenAddress,
-      //   dao.daoContract,
-      //   token.tokenID,
-      //   block,
-      //   address,
-      //   poll.isXTZ
-      // );
+      const total = await getEthUserBalanceAtLevel(dao.network, address, dao.tokenAddress, block)
+      console.log("EthTotal_UserBalance: ", total)
 
-      // if (!total) {
-      //   throw new Error("Could not get total power at reference block");
-      // }
+      if (!total) {
+        throw new Error("Could not get total power at reference block");
+      }
 
       // if (total.eq(0)) {
       //   throw new Error("No balance at proposal level");
       // }
+      
       const isVoted = await ChoiceModel.find({
         pollId: poll._id,
         walletAddresses: { $elemMatch: { address: address } }
@@ -108,8 +102,7 @@ const updateChoiceById = async (req, response) => {
 
       const walletVote = {
         address,
-        balanceAtReferenceBlock: 1,
-        // balanceAtReferenceBlock: total.toString(),
+        balanceAtReferenceBlock: total.toString(),
         payloadBytes,
         payloadBytesHash: md5(payloadBytes),
         signature,

@@ -17,7 +17,7 @@ const TokenModel = require("../../db/models/Token.model");
 const PollModel = require("../../db/models/Poll.model");
 const ChoiceModel = require("../../db/models/Choice.model");
 
-const { getEthCurrentBlock, getEthTotalSupply } = require("../../utils-eth");
+const { getEthCurrentBlockNumber, getEthTotalSupply } = require("../../utils-eth");
 
 const ObjectId = require("mongodb").ObjectId;
 
@@ -100,7 +100,7 @@ const addPoll = async (req, response) => {
       const token = await TokenModel.findOne({ tokenAddress: dao.tokenAddress });
       if (!token) throw new Error("DAO Token Does not exist in system");
 
-      const block = await getEthCurrentBlock(dao.network);
+      const block = await getEthCurrentBlockNumber(dao.network);
       const author = publicKey;
       const startTime = currentTime;
       const totalSupply = await getEthTotalSupply(

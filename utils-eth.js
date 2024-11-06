@@ -329,7 +329,7 @@ function _getEthProvider(network) {
 }
 
 function _getEthRestEndpoint(network) {
-    const rpcEndpoint = network.includes("test") ? "https://testnet.explorer.etherlink.com/api/v2" : "https://node.mainnet.etherlink.com";
+    const rpcEndpoint = network.includes("test") ? "https://testnet.explorer.etherlink.com/api/v2" : "https://explorer.etherlink.com/api/v2";
     return rpcEndpoint;
 }
 
@@ -398,21 +398,27 @@ async function getEthTokenMetadata(network, tokenAddress) {
 async function getEthCurrentBlock(network) {
     const provider = _getEthProvider(network);
     const block = await provider.getBlock('latest');
+    return block;
+}
+
+async function getEthCurrentBlockNumber(network) {
+    const provider = _getEthProvider(network);
+    const block = await provider.getBlock('latest');
     return block.number;
 }
 
 // ✅ Working
 async function getEthUserBalanceAtLevel(network, walletAddress, tokenAddress, block = 0) {
-    if (!block) block = await getEthCurrentBlock(network);
+    if (!block) block = await getEthCurrentBlockNumber(network);
     const provider = _getEthProvider(network);
     console.log({ network, walletAddress, tokenAddress, block })
     const tokenContract = new ethers.Contract(tokenAddress, tokenAbiForErc20, provider);
-    const balance = await tokenContract.balanceOf(walletAddress, { blockTag: block });
+    const balance = await tokenContract.balanceOf(walletAddress, { blockTag: Number(block) });
     return balance;
 }
 
 async function getEthTotalSupply(network, tokenAddress, block = 0) {
-    if (!block) block = await getEthCurrentBlock(network);
+    if (!block) block = await getEthCurrentBlockNumber(network);
     const provider = _getEthProvider(network);
     const tokenContract = new ethers.Contract(tokenAddress, tokenAbiForErc20, provider);
     const totalSupply = await tokenContract.totalSupply({ blockTag: block });
@@ -421,7 +427,7 @@ async function getEthTotalSupply(network, tokenAddress, block = 0) {
 
 // This won't work efficiently for large block ranges, Indexer needs to be used for this
 async function getEthTokenHoldersCount(network, tokenAddress, block = 0) {
-    if (!block) block = await getEthCurrentBlock(network);
+    if (!block) block = await getEthCurrentBlockNumber(network);
     const provider = _getEthProvider(network);
     const contract = new ethers.Contract(tokenAddress, tokenAbiForErc20, provider);
 
@@ -451,6 +457,17 @@ async function getEthTokenHoldersCount(network, tokenAddress, block = 0) {
     return holders.size;
 }
 
+async function getEthBlockTimeDifference(network) {
+    const url = _getEthRestEndpoint(network)
+    const etherlinkData = await fetch(`${url}/blocks?type=block`).then(x => x.json())
+    const firstTwoBlocks = [etherlinkData.items[0], etherlinkData.items[1]]
+    const timeDifference = Math.ceil(
+        (new Date(firstTwoBlocks[0].timestamp).getTime() - new Date(firstTwoBlocks[1].timestamp).getTime()) / 1000
+    )
+    return {
+        timeBetweenBlocks: timeDifference
+    }
+}
 // getEthTokenMetadata("etherlink_testnet", "0x336bfd0356f6babec084f9120901c0296db1967e").then(console.log)
 
 // getEthTokenHoldersCount("etherlink_testnet","0x336bfd0356f6babec084f9120901c0296db1967e").then(console.log)
@@ -464,7 +481,7 @@ async function getEthTokenHoldersCount(network, tokenAddress, block = 0) {
 
 
 // ✅ Working
-// getEthCurrentBlock("etherlink_testnet").then(console.log)
+// getEthCurrentBlockNumber("etherlink_testnet").then(console.log)
 
 console.log("from ETH")
 
@@ -472,7 +489,9 @@ module.exports = {
     verityEthSignture,
     getEthTokenMetadata,
     getEthCurrentBlock,
+    getEthCurrentBlockNumber,
     getEthUserBalanceAtLevel,
     getEthTotalSupply,
     getEthTokenHoldersCount,
+    getEthBlockTimeDifference,
 }

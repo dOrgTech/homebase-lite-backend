@@ -9,7 +9,7 @@ const {
 } = require("../../utils");
 const {
   getEthTokenHoldersCount,
-  getEthCurrentBlock,
+  getEthCurrentBlockNumber,
   getEthUserBalanceAtLevel,
   getEthTokenMetadata,
 } = require("../../utils-eth");
@@ -239,7 +239,7 @@ const createDAO = async (req, response) => {
 
     const address = publicKey
 
-    const block = await getEthCurrentBlock(network);
+    const block = await getEthCurrentBlockNumber(network);
     const userBalanceAtCurrentLevel = await getEthUserBalanceAtLevel(
       network,
       address,
