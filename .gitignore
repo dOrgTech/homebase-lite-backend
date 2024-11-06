@@ -32,3 +32,4 @@ yarn-error.log*
 yarn.lock
 test.js
 .vscode
+bun.lockb
