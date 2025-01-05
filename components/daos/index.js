@@ -41,6 +41,7 @@ const getAllLiteOnlyDAOs = async (req, response) => {
       return {
         _id: dao._id,
         ...dao,
+        description: dao.description?.replace(/<[^>]*>/g, ''),
         ...token
       }
     });
@@ -102,6 +103,7 @@ const getDAOFromContractAddress = async (req, response) => {
         _id: result._id,
         ...token,
         ...result,
+        description: result.description?.replace(/<[^>]*>/g, ''),
       };
 
       return response.json(newResult);
@@ -121,7 +123,10 @@ const getDAOById = async (req, response) => {
   const daoDao = await DaoModel.findById(id);
   console.log({ id, daoDao })
   if (daoDao) {
-    return response.json(daoDao);
+    return response.json({
+      ...daoDao.toJSON(),
+      description: daoDao.description?.replace(/<[^>]*>/g, ''),
+    });
   }
 
   try {
