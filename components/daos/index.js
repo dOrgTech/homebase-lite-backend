@@ -18,7 +18,7 @@ const dbo = require("../../db/conn");
 const { getPkhfromPk } = require("@taquito/utils");
 const DaoModel = require("../../db/models/Dao.model");
 const TokenModel = require("../../db/models/Token.model");
-
+const PollModel = require("../../db/models/Poll.model");
 const getAllLiteOnlyDAOs = async (req, response) => {
   const network = req.body?.network || req.query.network;
 
@@ -120,11 +120,31 @@ const getDAOFromContractAddress = async (req, response) => {
 
 const getDAOById = async (req, response) => {
   const { id } = req.params;
-  const daoDao = await DaoModel.findById(id);
-  console.log({ id, daoDao })
+  const include = req.query.include
+  const query = {}
+  if(mongoose.isValidObjectId(id)) {
+    query._id = new mongoose.Types.ObjectId(id);
+  } else {
+    //  query.type = "onchain";
+    query.address = { $regex: new RegExp(`^${id}$`, 'i') };
+  }
+  let daoDao =  await DaoModel.findOne(query)
+  daoDao = await daoDao.toObject()
+
+  if(include === "polls"){
+    
+    console.log("Include Polls")
+    const pollIds = daoDao.polls.map(poll => poll._id);
+    console.log("Poll IDs", pollIds)
+
+    const polls = await PollModel.find({ daoID: { $regex: new RegExp(`^${id}$`, 'i') } }).populate('choices').lean();
+    console.log("Polls", polls)
+
+    daoDao.polls = polls;
+  }
   if (daoDao) {
     return response.json({
-      ...daoDao.toJSON(),
+      ...daoDao,
       description: daoDao.description?.replace(/<[^>]*>/g, ''),
     });
   }

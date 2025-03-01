@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const express = require("express");
 const md5 = require("md5");
 // This will help us connect to the database
@@ -61,8 +62,13 @@ const updateChoiceById = async (req, response) => {
       if (timeNow > Number(poll.endTime)) {
         throw new Error("Proposal Already Ended");
       }
-
-      const dao = await DAOModel.findById(poll.daoID)
+      const daoFindQuery = {}
+      if(mongoose.isValidObjectId(poll.daoID)){
+        daoFindQuery._id = poll.daoID
+      } else {
+        daoFindQuery.address = { $regex: new RegExp(`^${poll.daoID}$`, 'i') };
+      }
+      const dao = await DAOModel.findOne(daoFindQuery)
       if (!dao) throw new Error(`DAO not found: ${poll.daoID}`)
 
       const token = await TokenModel.findOne({ tokenAddress: dao.tokenAddress })
@@ -83,7 +89,7 @@ const updateChoiceById = async (req, response) => {
       );
       if (duplicates.length > 0) throw new Error("Duplicate choices found");
 
-      const total = await getEthUserBalanceAtLevel(dao.network, address, dao.tokenAddress, block)
+      const total = await getEthUserBalanceAtLevel(dao.network || network, address, dao.tokenAddress, block)
       console.log("EthTotal_UserBalance: ", total)
 
       if (!total) {

@@ -1,7 +1,7 @@
 const catchAsync = (fn) => (req, res, next) => {
     Promise.resolve(fn(req, res, next)).catch((err) => {
         const errName = err.name
-        const errMessage = err.message;
+        let errMessage = err.message;
 
         console.error({ errName })
         if (!errMessage) errMessage = err;
