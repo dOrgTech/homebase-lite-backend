@@ -151,7 +151,7 @@ function sanitizeObject(obj, seen = new WeakSet()) {
           'formaction', 'action', 'method'
         ],
         // Strip JS events
-        FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'form', 'input', 'button', 'base'],
+        FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'form', 'input', 'button', 'base','style'],
         // Prevent potentially dangerous URLs
         SANITIZE_DOM: true,
         KEEP_CONTENT: true
