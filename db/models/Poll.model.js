@@ -30,6 +30,7 @@ const PollModelSchema = new Schema({
   choices: [{
     type: mongoose.Schema.Types.ObjectId,
     required: true,
+    ref: 'Choice',
   }],
   totalSupplyAtReferenceBlock: {
     type: String,

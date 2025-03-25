@@ -11,6 +11,7 @@ const {
   getIPFSProofFromPayload,
 } = require("../../utils");
 
+const axios = require("axios");
 const { uploadToIPFS } = require("../../services/ipfs.service");
 const DaoModel = require("../../db/models/Dao.model");
 const TokenModel = require("../../db/models/Token.model");
@@ -21,6 +22,85 @@ const { getEthCurrentBlockNumber, getEthTotalSupply } = require("../../utils-eth
 
 const ObjectId = require("mongodb").ObjectId;
 
+async function _getPollData(mode="lite", {
+  daoId, network, tokenAddress = null, authorAddress = null, payloadBytes = null
+}){
+  if(!network?.startsWith("etherlink"))
+    throw new Error("Network is not supported");
+
+  const currentTime = new Date().valueOf();
+
+  if(mode == "onchain"){
+
+    console.log("tokenAddress", tokenAddress)
+    const [userTokenBalance, tokenTotalSupply, block] = await Promise.all([
+      axios.get(`https://testnet.explorer.etherlink.com/api/v2/tokens/${tokenAddress}/holders`).then(res =>  res.data).catch(err => ({error: err.message})),
+      axios.get(`https://testnet.explorer.etherlink.com/api/v2/tokens/${tokenAddress}`).then(res =>  res.data).catch(err => ({error: err.message})),
+      getEthCurrentBlockNumber(network).catch(err => ({error: err.message}))
+    ]);
+
+    console.log(JSON.stringify({userTokenBalance, tokenTotalSupply, block}, null, 2));
+
+    const payloadBytesHash = md5(payloadBytes);
+    const doesPollExists = await PollModel.findOne({ payloadBytesHash });
+    if (doesPollExists)
+      throw new Error("Invalid Signature, Poll already exists");
+
+
+    return {
+      startTime: currentTime,
+      referenceBlock: block,
+      totalSupplyAtReferenceBlock: tokenTotalSupply.total_supply,
+      payloadBytesHash,
+      doesPollExists
+    }
+  }
+  else{
+
+    const dao = await DaoModel.findById(daoId);
+    if(!dao) throw new Error("DAO Does not exist");
+
+    const token = await TokenModel.findOne({ tokenAddress: dao.tokenAddress });
+    if (!token) throw new Error("DAO Token Does not exist in system");
+
+    const block = await getEthCurrentBlockNumber(dao.network);
+    const totalSupply = await getEthTotalSupply(
+      dao.network,
+      dao.tokenAddress,
+      block
+    );
+         // TODO: @ashutoshpw To be Implemented
+      // const userVotingPowerAtCurrentLevel =
+      //   await getUserTotalVotingPowerAtReferenceBlock(
+      //     dao.network,
+      //     dao.tokenAddress,
+      //     dao.daoContract,
+      //     token.tokenID,
+      //     block,
+      //     author
+      //   );
+
+      // if (userVotingPowerAtCurrentLevel.eq(0) && dao.requiredTokenOwnership) {
+      //   throw new Error(
+      //     "User Doesnt have balance at this level to create proposal"
+      //   );
+      // }
+    const payloadBytesHash = md5(payloadBytes);
+    const doesPollExists = await PollModel.findOne({ payloadBytesHash });
+    if (doesPollExists)
+      throw new Error("Invalid Signature, Poll already exists");
+
+    return {
+      daoId,
+      startTime: currentTime,
+      referenceBlock: block,
+      totalSupplyAtReferenceBlock: totalSupply,
+      payloadBytesHash,
+      doesPollExists
+    }
+  }
+}
+
 const getPollById = async (req, response) => {
   const { id } = req.params;
 
@@ -29,7 +109,11 @@ const getPollById = async (req, response) => {
     let pollId = { _id: ObjectId(id) };
 
     const result = await db_connect.collection("Polls").findOne(pollId);
-    response.json(result);
+    response.json({
+      ...result,
+      name: result.name?.replace(/<[^>]*>/g, ''),
+      description: result.description?.replace(/<[^>]*>/g, ''),
+    });
   } catch (error) {
     console.log("error: ", error);
     response.status(400).send({
@@ -50,7 +134,15 @@ const getPollsById = async (req, response) => {
       .sort({ _id: -1 })
       .toArray();
 
-    response.json(polls);
+      const pollsFilltered = polls.map(poll => {
+        return {
+          ...poll,
+          name: poll.name.replace(/<[^>]*>/g, ''),
+          description: poll.description.replace(/<[^>]*>/g, ''),
+        }
+      })
+
+    response.json(pollsFilltered);
   } catch (error) {
     console.log("error: ", error);
     response.status(400).send({
@@ -65,10 +157,12 @@ const addPoll = async (req, response) => {
 
   if (network?.startsWith("etherlink")) {
     try {
-      const payload = req.payloadObj;
+      let payload = req.payloadObj;
+      if(!payload){
+        payload = getInputFromSigPayload(payloadBytes);
+      }
       const {
         choices,
-        daoID,
         name,
         description,
         externalLink,
@@ -76,7 +170,8 @@ const addPoll = async (req, response) => {
         votingStrategy,
         isXTZ,
       } = payload;
-
+      const daoID = payload?.daoID || payload?.daoId;
+      console.log("Payload", payload)
       if (choices.length === 0) {
         throw new Error("No choices sent in the request");
       }
@@ -94,43 +189,29 @@ const addPoll = async (req, response) => {
         throw new Error("Duplicate choices found");
       }
 
-      const dao = await DaoModel.findById(daoID);
-      if (!dao) throw new Error("DAO Does not exist");
+      /**
+       * @ashutoshpw
+       * 
+       * For Offchain Debate
+       * - Get token Addresswithin the payload
+       * = Get the User Token Balance by following API: https://testnet.explorer.etherlink.com/api/v2/tokens/0xBDAc0fBE8cf84eA51cB9436719f6074dA474ef5D/holders
+       * - Get token Total Supplyw ith this: https://testnet.explorer.etherlink.com/api/v2/tokens/0xBDAc0fBE8cf84eA51cB9436719f6074dA474ef5D
+       */
 
-      const token = await TokenModel.findOne({ tokenAddress: dao.tokenAddress });
-      if (!token) throw new Error("DAO Token Does not exist in system");
-
-      const block = await getEthCurrentBlockNumber(dao.network);
       const author = publicKey;
-      const startTime = currentTime;
-      const totalSupply = await getEthTotalSupply(
-        dao.network,
-        dao.tokenAddress,
-        block
-      );
 
-      // TODO: @ashutoshpw To be Implemented
-      // const userVotingPowerAtCurrentLevel =
-      //   await getUserTotalVotingPowerAtReferenceBlock(
-      //     dao.network,
-      //     dao.tokenAddress,
-      //     dao.daoContract,
-      //     token.tokenID,
-      //     block,
-      //     author
-      //   );
+      const daoMode = daoID?.startsWith("0x") ? "onchain" : "lite";
+      const { startTime, referenceBlock, totalSupplyAtReferenceBlock, payloadBytesHash, doesPollExists} = await _getPollData(daoMode, {
+        daoId: daoID, 
+        network, 
+        authorAddress: publicKey,
+        tokenAddress: payload?.tokenAddress,
+        payloadBytes
+      });
 
-      // if (userVotingPowerAtCurrentLevel.eq(0) && dao.requiredTokenOwnership) {
-      //   throw new Error(
-      //     "User Doesnt have balance at this level to create proposal"
-      //   );
-      // }
-
-      const payloadBytesHash = md5(payloadBytes);
-      const doesPollExists = await PollModel.findOne({ payloadBytesHash });
-      if (doesPollExists)
+      if(doesPollExists)
         throw new Error("Invalid Signature, Poll already exists");
-
+      
       const PollData = {
         name,
         author,
@@ -139,10 +220,11 @@ const addPoll = async (req, response) => {
         startTime,
         endTime,
         daoID,
-        referenceBlock: block,
-        totalSupplyAtReferenceBlock: totalSupply,
+        referenceBlock,
+        totalSupplyAtReferenceBlock,
         signature,
-        votingStrategy,
+        votingStrategy: payload?.votingStrategy || 0,
+        isXTZ: payload?.isXTZ || false,
         payloadBytes,
         payloadBytesHash,
         cidLink: "",
@@ -159,14 +241,35 @@ const addPoll = async (req, response) => {
         };
       });
 
-      await ChoiceModel.insertMany(choicesData);
+      const choicesObj = await ChoiceModel.insertMany(choicesData);
+      const choicesIds = choicesObj.map(choice => choice._id);
+      console.log({choicesIds})
 
-      await DaoModel.updateOne(
-        { _id: ObjectId(daoID) },
-        {
-          $push: { polls: pollId },
-        }
+      await PollModel.updateOne(
+        { _id: pollId },
+        { $set: { choices: choicesIds } }
       );
+
+      if(daoMode == "lite"){
+        await DaoModel.updateOne(
+          { _id: ObjectId(daoID) },
+          {
+            $push: { polls: pollId },
+          }
+        );
+      }else{
+        await DaoModel.findOneAndUpdate(
+          { address: daoID },
+          {
+            name: daoID,
+            tokenAddress: payload?.tokenAddress,
+            tokenType:"erc20",
+            $push: { polls: pollId },
+            votingAddressesCount: 0 // TODO: @ashutoshpw
+          },
+          { upsert: true, new: true }
+        );
+      }
       return response.status(200).send({
         message: "Poll Created Successfully",
         pollId,
