@@ -6,11 +6,22 @@ const Schema = mongoose.Schema;
 const PollSchema = new Schema({
   oid: {
     type: mongoose.Schema.Types.ObjectId,
+    ref: "Poll",
     required: true,
   },
 });
 
 const DaoModelSchema = new Schema({
+  type:{
+    type: String,
+    enum:["onchain","lite"],
+    default: "lite",
+  },
+  address:{
+    type: String,
+    index: true,
+    sparse: true
+  },
   name: {
     type: String,
     required: true,

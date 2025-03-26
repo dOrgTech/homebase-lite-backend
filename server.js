@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const mongoose = require('mongoose');
+const { securePayload } = require("./middlewares");
 
 require("dotenv").config({ path: "./config.env" });
 
@@ -18,6 +19,9 @@ app.use(
 
 app.use(express.json());
 
+// Apply XSS protection middleware globally
+app.use(securePayload);
+
 // Include Swagger route at the base URL
 app.use('/', require('./routes/swagger'));
 
@@ -26,6 +30,7 @@ app.use(require("./routes/daos"));
 app.use(require("./routes/polls"));
 app.use(require("./routes/tokens"));
 app.use(require("./routes/choices"));
+app.use(require("./routes/blocks"));
 app.use(require("./routes/aci"));
 
 app.listen(port, async () => {

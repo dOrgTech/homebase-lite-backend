@@ -1,5 +1,6 @@
 const { verifySignature, bytes2Char } = require("@taquito/utils");
 const { verityEthSignture } = require("../utils-eth");
+const securePayload = require("./secure-payload");
 
 function splitAtBrace(inputString) {
   const squareBracketIndex = inputString.indexOf('[');
@@ -74,4 +75,5 @@ const requireSignature = async (request, response, next) => {
 
 module.exports = {
   requireSignature,
+  securePayload,
 };

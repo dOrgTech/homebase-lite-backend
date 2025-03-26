@@ -5,7 +5,7 @@ const dbo = require("../../db/conn");
 const TokenModel = require("../../db/models/Token.model");
 const DAOModel = require("../../db/models/Dao.model");
 const { getUserTotalVotingPowerAtReferenceBlock } = require("../../utils");
-const { getEthTokenMetadata } = require("../../utils-eth");
+const { getEthTokenMetadata, getEthUserBalanceAtLevel } = require("../../utils-eth");
 
 const ObjectId = mongodb.ObjectId;
 const addToken = async (req, response) => {
@@ -59,6 +59,13 @@ const getTokenById = async (req, response) => {
 const getVotingPowerAtLevel = async (req, response) => {
   const { network, address, tokenID } = req.params;
   const { userAddress, level } = req.query;
+
+  const isEtherlink = network?.startsWith("etherlink")
+  if(isEtherlink) {
+    const votingWeight = await getEthUserBalanceAtLevel(network, userAddress, address, null)
+    console.log("EthVotingWeight: ", votingWeight)
+    return response.json({ votingWeight: votingWeight.toString(), votingXTZWeight: 0 })
+  }
 
   try {
     let db_connect = dbo.getDb();
