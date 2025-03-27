@@ -134,7 +134,15 @@ const getPollsById = async (req, response) => {
       .sort({ _id: -1 })
       .toArray();
 
-    response.json(polls);
+      const pollsFilltered = polls.map(poll => {
+        return {
+          ...poll,
+          name: poll.name.replace(/<[^>]*>/g, ''),
+          description: poll.description.replace(/<[^>]*>/g, ''),
+        }
+      })
+
+    response.json(pollsFilltered);
   } catch (error) {
     console.log("error: ", error);
     response.status(400).send({
