@@ -22,6 +22,13 @@ const { getEthCurrentBlockNumber, getEthTotalSupply } = require("../../utils-eth
 
 const ObjectId = require("mongodb").ObjectId;
 
+function validateExternalLink(externalLink) {
+  if (!externalLink || typeof externalLink !== 'string') {
+    return '';
+  }
+  return externalLink.startsWith('https://') ? externalLink : '';
+}
+
 async function _getPollData(mode="lite", {
   daoId, network, tokenAddress = null, authorAddress = null, payloadBytes = null
 }){
@@ -113,6 +120,7 @@ const getPollById = async (req, response) => {
       ...result,
       name: result.name?.replace(/<[^>]*>/g, ''),
       description: result.description?.replace(/<[^>]*>/g, ''),
+      externalLink: validateExternalLink(result.externalLink),
     });
   } catch (error) {
     console.log("error: ", error);
@@ -139,6 +147,7 @@ const getPollsById = async (req, response) => {
           ...poll,
           name: poll.name.replace(/<[^>]*>/g, ''),
           description: poll.description.replace(/<[^>]*>/g, ''),
+          externalLink: validateExternalLink(poll.externalLink),
         }
       })
 
@@ -216,7 +225,7 @@ const addPoll = async (req, response) => {
         name,
         author,
         description,
-        externalLink,
+        externalLink: validateExternalLink(externalLink),
         startTime,
         endTime,
         daoID,
@@ -395,7 +404,7 @@ const addPoll = async (req, response) => {
       let PollData = {
         name,
         description,
-        externalLink,
+        externalLink: validateExternalLink(externalLink),
         startTime,
         endTime,
         daoID,
