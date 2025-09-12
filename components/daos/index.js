@@ -143,10 +143,7 @@ const getDAOById = async (req, response) => {
     daoDao.polls = polls;
   }
   if (daoDao) {
-    return response.json({
-      ...daoDao,
-      description: daoDao.description?.replace(/<[^>]*>/g, ''),
-    });
+ return response.json(daoDao);
   }
 
   try {
