@@ -44,17 +44,20 @@ const getChoiceById = async (req, response) => {
 const updateChoiceById = async (req, response) => {
   const { payloadBytes, publicKey, signature } = req.body;
   const network = req.body.network;
+  const reqId = req.id || "no-reqid";
+  console.log("[choices.update:start]", { reqId, network, path: req.originalUrl });
   let j = 0;
   let i = 0;
   const timeNow = new Date().valueOf();
 
   if (network?.startsWith("etherlink")) {
     try {
-      console.log('[payload]', req.payloadObj)
+      console.log("[choices.update:eth:payload]", { reqId, length: Array.isArray(req.payloadObj) ? req.payloadObj.length : -1 });
       const castedChoices = req.payloadObj;
       if (castedChoices.length === 0) throw new Error("No choices sent in the request");
       const address = castedChoices[0].address
       const pollId = castedChoices[0].pollID
+      console.log("[choices.update:eth:fetch-poll]", { reqId, pollId });
       const poll = await PollModel.findById(pollId)
 
       if(!poll) throw new Error("Poll not found")
@@ -68,6 +71,7 @@ const updateChoiceById = async (req, response) => {
       } else {
         daoFindQuery.address = { $regex: new RegExp(`^${poll.daoID}$`, 'i') };
       }
+      console.log("[choices.update:eth:find-dao]", { reqId, daoFindQuery });
       const dao = await DAOModel.findOne(daoFindQuery)
       if (!dao) throw new Error(`DAO not found: ${poll.daoID}`)
 
@@ -89,8 +93,9 @@ const updateChoiceById = async (req, response) => {
       );
       if (duplicates.length > 0) throw new Error("Duplicate choices found");
 
+      console.log("[choices.update:eth:balance-request]", { reqId, net: dao.network || network, address, token: dao.tokenAddress, block });
       const total = await getEthUserBalanceAtLevel(dao.network || network, address, dao.tokenAddress, block)
-      console.log("EthTotal_UserBalance: ", total)
+      console.log("[choices.update:eth:balance-response]", { reqId, total: total?.toString?.() || total });
 
       if (!total) {
         throw new Error("Could not get total power at reference block");
@@ -104,6 +109,7 @@ const updateChoiceById = async (req, response) => {
         pollId: poll._id,
         walletAddresses: { $elemMatch: { address: address } }
       });
+      console.log("[choices.update:eth:is-voted]", { reqId, count: isVoted?.length || 0 });
 
 
       const walletVote = {
@@ -117,6 +123,7 @@ const updateChoiceById = async (req, response) => {
       if (isVoted.length > 0) {
         const oldVoteObj = isVoted[0].walletAddresses.find(x => x.address === address);
         oldVote = await ChoiceModel.findById(oldVoteObj.choiceId);
+        console.log("[choices.update:eth:old-vote]", { reqId, hasOld: Boolean(oldVote) });
 
         // TODO: Enable Repeat Vote
         // const oldSignaturePayload = oldVote.walletAddresses[0].payloadBytes
@@ -146,6 +153,7 @@ const updateChoiceById = async (req, response) => {
               { _id: choiceId },
               updatePayload
             )
+            console.log("[choices.update:eth:update-one]", { reqId, choiceId });
           } else {
             await ChoiceModel.updateMany(
               { pollID: poll._id },
@@ -157,6 +165,7 @@ const updateChoiceById = async (req, response) => {
               updatePayload,
               { upsert: true }
             )
+            console.log("[choices.update:eth:update-many-one]", { reqId, choiceId });
           }
         }
 
@@ -171,12 +180,13 @@ const updateChoiceById = async (req, response) => {
             {_id: ObjectId(choiceId)}, 
             {$push: {walletAddresses: walletVote}
           })
+          console.log("[choices.update:eth:initial-vote]", { reqId, choiceId });
         }
       }
       return response.json({ success: true });
     }
     catch (error) {
-      console.log("error: ", error);
+      console.error("[choices.update:eth:error]", { reqId, error: error?.message, stack: error?.stack });
       return response.status(400).send({
         message: error.message,
       });
@@ -185,17 +195,22 @@ const updateChoiceById = async (req, response) => {
   else {
     try {
       let oldVote = null;
+      console.log("[choices.update:tz:parse]", { reqId, payloadBytesLen: payloadBytes?.length });
       const values = getInputFromSigPayload(payloadBytes);
+      console.log("[choices.update:tz:values]", { reqId, count: values?.length || 0 });
 
       const payloadDate = getTimestampFromPayloadBytes(payloadBytes);
+      console.log("[choices.update:tz:payload-date]", { reqId, payloadDate });
 
       let db_connect = dbo.getDb("Lite");
 
       const pollID = values[0].pollID;
+      console.log("[choices.update:tz:poll-id]", { reqId, pollID });
 
       const poll = await db_connect
         .collection("Polls")
         .findOne({ _id: ObjectId(pollID) });
+      console.log("[choices.update:tz:poll]", { reqId, found: Boolean(poll) });
 
       if (timeNow > poll.endTime) {
         throw new Error("Proposal Already Ended");
@@ -204,14 +219,17 @@ const updateChoiceById = async (req, response) => {
       const dao = await db_connect
         .collection("DAOs")
         .findOne({ _id: ObjectId(poll.daoID) });
+      console.log("[choices.update:tz:dao]", { reqId, found: Boolean(dao) });
 
       const token = await db_connect
         .collection("Tokens")
         .findOne({ tokenAddress: dao.tokenAddress });
+      console.log("[choices.update:tz:token]", { reqId, tokenAddress: token?.tokenAddress });
 
       const block = poll.referenceBlock;
 
       const address = getPkhfromPk(publicKey);
+      console.log("[choices.update:tz:address]", { reqId, address });
 
       // Validate values
       if (values.length === 0) {
@@ -244,6 +262,7 @@ const updateChoiceById = async (req, response) => {
         address,
         poll.isXTZ
       );
+      console.log("[choices.update:tz:total]", { reqId, total: total?.toString?.() || total });
 
       if (!total) {
         throw new Error("Could not get total power at reference block");
@@ -259,6 +278,7 @@ const updateChoiceById = async (req, response) => {
           walletAddresses: { $elemMatch: { address: address } },
         })
         .toArray();
+      console.log("[choices.update:tz:is-voted]", { reqId, count: isVoted?.length || 0 });
 
 
       if (isVoted.length > 0) {
@@ -350,7 +370,7 @@ const updateChoiceById = async (req, response) => {
                 // .then((res) => response.json({ success: true }));
               } catch (e) {
                 result = e.Message;
-                console.log(e);
+                console.error("[choices.update:tz:tx-error]", { reqId, error: e?.message, stack: e?.stack });
                 await session.abortTransaction();
                 throw new Error(e);
               } finally {
@@ -397,7 +417,7 @@ const updateChoiceById = async (req, response) => {
                   });
               } catch (e) {
                 result = e.Message;
-                console.log(e);
+                console.error("[choices.update:tz:tx-error]", { reqId, error: e?.message, stack: e?.stack });
                 await session.abortTransaction();
                 throw new Error(e);
               } finally {
@@ -419,6 +439,7 @@ const updateChoiceById = async (req, response) => {
             const res = await db_connect
               .collection("Choices")
               .updateOne(newId, data, { upsert: true });
+            console.log("[choices.update:tz:initial-vote]", { reqId, choiceId: choice._id });
 
             j++;
 
@@ -431,9 +452,10 @@ const updateChoiceById = async (req, response) => {
         })
       );
 
+      console.log("[choices.update:tz:success]", { reqId });
       response.json({ success: true });
     } catch (error) {
-      console.log("error: ", error);
+      console.error("[choices.update:tz:error]", { reqId, error: error?.message, stack: error?.stack });
       response.status(400).send({
         message: error.message,
       });
