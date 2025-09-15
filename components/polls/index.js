@@ -116,10 +116,14 @@ const getPollById = async (req, response) => {
     let pollId = { _id: ObjectId(id) };
 
     const result = await db_connect.collection("Polls").findOne(pollId);
+    
+    // No Sanitization for Tezos Ecosystem
+    let shouldSkipSanitzation = result?.daoID === "64ef1c7d514de7b078cb8ed2"
+
     response.json({
       ...result,
       name: result.name?.replace(/<[^>]*>/g, ''),
-      description: result.description?.replace(/<[^>]*>/g, ''),
+      description: shouldSkipSanitzation ? result.description : result.description?.replace(/<[^>]*>/g, ''),
       externalLink: validateExternalLink(result.externalLink),
     });
   } catch (error) {
@@ -132,6 +136,7 @@ const getPollById = async (req, response) => {
 
 const getPollsById = async (req, response) => {
   const { id } = req.params;
+  let shouldSkipSanitzation = false;
 
   try {
     let db_connect = dbo.getDb();
