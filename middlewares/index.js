@@ -58,16 +58,24 @@ const requireSignature = async (request, response, next) => {
         return next()
         }catch(error){
           console.error("[requireSignature:eth:parse-error]", { reqId, error: error?.message })
-          response.status(400).send("Invalid Eth Signature/Account")
+          if (!response.headersSent) {
+            response.status(400).send("Invalid Eth Signature/Account")
+          }
+          return;
         }
       }else{
         console.warn("[requireSignature:eth:invalid]", { reqId })
-        response.status(400).send("Invalid Eth Signature/Account")
+        if (!response.headersSent) {
+          response.status(400).send("Invalid Eth Signature/Account")
+        }
+        return;
       }
     }
     if (!signature || !publicKey || !payloadBytes) {
       console.warn("[requireSignature:invalid-payload]", { reqId })
-      response.status(500).send("Invalid Signature Payload");
+      if (!response.headersSent) {
+        response.status(500).send("Invalid Signature Payload");
+      }
       return;
     }
 
@@ -83,11 +91,15 @@ const requireSignature = async (request, response, next) => {
       next();
     } else {
       console.warn("[requireSignature:invalid]", { reqId });
-      response.status(400).send("Invalid Signature/Account");
+      if (!response.headersSent) {
+        response.status(400).send("Invalid Signature/Account");
+      }
     }
   } catch (error) {
-    console.error("[requireSignature:catch]", { error: error?.message });
-    response.status(400).send("Could not verify signature");
+    console.error("[requireSignature:catch]", { reqId, error: error?.message });
+    if (!response.headersSent) {
+      response.status(400).send("Could not verify signature");
+    }
   }
 };
 

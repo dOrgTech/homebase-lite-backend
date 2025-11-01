@@ -34,3 +34,6 @@ bun.lockb
 test.js
 .vscode
 bun.lockb
+
+# Local Netlify folder
+.netlify

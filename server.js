@@ -1,12 +1,11 @@
 const express = require("express");
 const cors = require("cors");
-const mongoose = require('mongoose');
 const { securePayload } = require("./middlewares");
+const { connectToMongoose } = require("./db/mongoose-connection");
 
-require("dotenv").config({ path: "./config.env" });
-
-// get driver connection
-const dbo = require("./db/conn");
+if (process.env.NODE_ENV !== 'production') {
+  require("dotenv").config({ path: "./config.env" });
+}
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -56,17 +55,6 @@ app.use(require("./routes/choices"));
 app.use(require("./routes/blocks"));
 app.use(require("./routes/aci"));
 
-app.listen(port, async () => {
-  // perform a database connection when server starts
-  try {
-    dbo.connectToServer();
-  } catch (error) {
-    console.error(error);
-  }
-
-  console.log(`Server is running on port: ${port}`);
-});
-
 // Global error handler to avoid crashing without logs
 // Place after routes to catch any unhandled errors
 app.use((err, req, res, next) => {
@@ -83,27 +71,16 @@ app.use((err, req, res, next) => {
   res.status(500).json({ success: false, message: "Internal Server Error" });
 });
 
-function getMongoDBDatabaseName(url) {
-  const dbNameMatch = url.match(/\/([^/?]+)(\?|$)/);
-  return dbNameMatch ? dbNameMatch[1] : null;
+if (require.main === module) {
+  app.listen(port, async () => {
+    try {
+      await connectToMongoose();
+      console.log(`Server is running on port: ${port}`);
+    } catch (error) {
+      console.error('Failed to connect to MongoDB:', error);
+      process.exit(1);
+    }
+  });
 }
 
-const connectToMongoDB = async () => {
-  try {
-    let connUrl = process.env.ATLAS_URI;
-    const database = getMongoDBDatabaseName(connUrl);
-    if (!database) {
-      const urlParts = connUrl.split('?');
-      connUrl = `${urlParts[0]}Lite?${urlParts[1] || ''}`;
-    }
-    console.log(connUrl);
-    await mongoose.connect(connUrl);
-    console.log('Connected to MongoDB using Mongoose');
-  } catch (error) {
-    console.error('Error connecting to MongoDB:', error);
-    process.exit(1);
-  }
-};
-
-// Call the function to connect to MongoDB
-connectToMongoDB();
+module.exports = { app, connectToMongoose };

@@ -1,4 +1,3 @@
-const ObjectId = require("mongodb").ObjectId;
 const mongoose = require("mongoose");
 const { getTokenMetadata } = require("../../services");
 const {
@@ -14,7 +13,6 @@ const {
   getEthTokenMetadata,
 } = require("../../utils-eth");
 
-const dbo = require("../../db/conn");
 const { getPkhfromPk } = require("@taquito/utils");
 const DaoModel = require("../../db/models/Dao.model");
 const TokenModel = require("../../db/models/Token.model");
@@ -50,28 +48,18 @@ const getAllLiteOnlyDAOs = async (req, response) => {
   }
 
   try {
-    let db_connect = dbo.getDb();
+    const allDaos = await DaoModel.find({ network, daoContract: null }).lean();
+    const allDaoIds = allDaos.map(dao => dao._id);
+    const allTokens = await TokenModel.find({ daoID: { $in: allDaoIds } }).lean();
 
-    const TokensCollection = db_connect.collection("Tokens");
-    const DAOCollection = db_connect.collection("DAOs");
-    const result = await DAOCollection.find({
-      network,
-      daoContract: null,
-    }).toArray();
-
-    const newResult = await Promise.all(
-      result.map(async (result) => {
-        const token = await TokensCollection.findOne({
-          daoID: result._id,
-        });
-
-        return {
-          _id: result._id,
-          ...token,
-          ...result,
-        };
-      })
-    );
+    const newResult = allDaos.map(dao => {
+      const token = allTokens.find(token => token.daoID.toString() === dao._id.toString());
+      return {
+        _id: dao._id,
+        ...token,
+        ...dao,
+      };
+    });
 
     response.json(newResult);
   } catch (error) {
@@ -87,17 +75,12 @@ const getDAOFromContractAddress = async (req, response) => {
   const { daoContract } = req.params;
 
   try {
-    let db_connect = dbo.getDb();
-
-    const TokensCollection = db_connect.collection("Tokens");
-    const DAOCollection = db_connect.collection("DAOs");
-
-    const result = await DAOCollection.findOne({ network, daoContract });
+    const result = await DaoModel.findOne({ network, daoContract }).lean();
 
     if (result) {
-      const token = await TokensCollection.findOne({
-        daoID: result.id,
-      });
+      const token = await TokenModel.findOne({
+        daoID: result._id,
+      }).lean();
 
       const newResult = {
         _id: result._id,
@@ -129,6 +112,9 @@ const getDAOById = async (req, response) => {
     query.address = { $regex: new RegExp(`^${id}$`, 'i') };
   }
   let daoDao =  await DaoModel.findOne(query)
+  if (!daoDao) {
+    return response.status(404).json({ error: 'DAO not found' });
+  }
   daoDao = await daoDao.toObject()
 
   if(include === "polls"){
@@ -150,11 +136,7 @@ const getDAOById = async (req, response) => {
   }
 
   try {
-    let db_connect = dbo.getDb();
-    const DAOCollection = db_connect.collection("DAOs");
-    let daoId = { _id: ObjectId(id) };
-    const result = await DAOCollection.findOne(daoId);
-
+    const result = await DaoModel.findById(id).lean();
     response.json(result);
   } catch (error) {
     console.log("error: ", error);
@@ -167,18 +149,12 @@ const getDAOById = async (req, response) => {
 const updateTotalCount = async (req, response) => {
   const { id } = req.params;
   try {
-    let db_connect = dbo.getDb();
-
-    const DAOCollection = db_connect.collection("DAOs");
-    let communityId = { _id: ObjectId(id) };
-    const dao = await DAOCollection.findOne(communityId);
+    const dao = await DaoModel.findById(id);
     if (!dao) {
       throw new Error("DAO not found");
     }
 
-    const token = await db_connect
-      .collection("Tokens")
-      .findOne({ tokenAddress: dao.tokenAddress });
+    const token = await TokenModel.findOne({ tokenAddress: dao.tokenAddress });
     if (!token) {
       throw new Error("DAO Token Does not exist in system");
     }
@@ -197,14 +173,10 @@ const updateTotalCount = async (req, response) => {
       );
     }
 
-    let data = {
-      $set: {
-        votingAddressesCount: count,
-      },
-    };
-    const res = await db_connect
-      .collection("DAOs")
-      .updateOne(communityId, data, { upsert: true });
+    const res = await DaoModel.updateOne(
+      { _id: id },
+      { $set: { votingAddressesCount: count } }
+    );
 
     response.json(res);
   } catch (error) {
@@ -217,20 +189,22 @@ const updateTotalCount = async (req, response) => {
 
 const updateTotalHolders = async (req, response) => {
   try {
-    let db_connect = dbo.getDb();
-    const DAOCollection = db_connect.collection("DAOs");
-
-    const result = await DAOCollection.find({}).forEach(function (item) {
-      DAOCollection.updateOne(
-        { _id: ObjectId(item._id) },
-        {
-          $set: {
-            votingAddressesCount: item.members ? item.members.length : 0,
-          },
-        }
-      );
-    });
-    response.json(result);
+    const allDaos = await DaoModel.find({}).lean();
+    
+    await Promise.all(
+      allDaos.map(async (item) => {
+        await DaoModel.updateOne(
+          { _id: item._id },
+          {
+            $set: {
+              votingAddressesCount: item.members ? item.members.length : 0,
+            },
+          }
+        );
+      })
+    );
+    
+    response.json({ success: true });
   } catch (error) {
     console.log("error: ", error);
     response.status(400).send({
@@ -323,13 +297,6 @@ const createDAO = async (req, response) => {
       daoContract,
     } = values;
 
-    let db_connect = dbo.getDb();
-
-    const mongoClient = dbo.getClient();
-    const session = mongoClient.startSession();
-
-    const original_id = ObjectId();
-
     const tokenData = await getTokenMetadata(tokenAddress, network, tokenID);
     const address = getPkhfromPk(publicKey);
 
@@ -344,7 +311,6 @@ const createDAO = async (req, response) => {
       tokenType: tokenData.standard,
       requiredTokenOwnership,
       allowPublicAccess,
-      _id: original_id,
       network,
       daoContract,
       votingAddressesCount: 0,
@@ -364,31 +330,27 @@ const createDAO = async (req, response) => {
       throw new Error("User does not have balance for this DAO token");
     }
 
-    try {
-      await session
-        .withTransaction(async () => {
-          const DAOCollection = db_connect.collection("DAOs");
-          const TokenCollection = db_connect.collection("Tokens");
-          // Important:: You must pass the session to the operations
-          await DAOCollection.insertOne(DAOData, { session });
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
-          await TokenCollection.insertOne(
-            {
-              tokenAddress,
-              tokenType: tokenData.standard,
-              symbol: tokenData.metadata.symbol,
-              tokenID: Number(tokenID),
-              daoID: original_id,
-              decimals: Number(tokenData.metadata.decimals),
-            },
-            { session }
-          );
-        })
-        .then((res) => response.json(res));
+    try {
+      const createdDao = await DaoModel.create([DAOData], { session });
+
+      await TokenModel.create([{
+        tokenAddress,
+        tokenType: tokenData.standard,
+        symbol: tokenData.metadata.symbol,
+        tokenID: Number(tokenID),
+        daoID: createdDao[0]._id,
+        decimals: Number(tokenData.metadata.decimals),
+      }], { session });
+
+      await session.commitTransaction();
+      response.json({ dao: createdDao[0] });
     } catch (e) {
-      result = e.Message;
-      console.log(e);
       await session.abortTransaction();
+      console.log(e);
+      throw e;
     } finally {
       await session.endSession();
     }
@@ -404,37 +366,22 @@ const joinDAO = async (req, response) => {
   const { payloadBytes, publicKey } = req.body;
 
   try {
-    let db_connect = dbo.getDb();
-    const DAOCollection = db_connect.collection("DAOs");
     const values = getInputFromSigPayload(payloadBytes);
     const { daoId } = values;
 
     const address = getPkhfromPk(publicKey);
 
-    let id = { _id: ObjectId(daoId) };
-    let data = [
-      {
-        $set: {
-          members: {
-            $cond: [
-              {
-                $in: [address, "$members"],
-              },
-              {
-                $setDifference: ["$members", [address]],
-              },
-              {
-                $concatArrays: ["$members", [address]],
-              },
-            ],
-          },
-        },
-      },
-    ];
+    const dao = await DaoModel.findById(daoId);
+    
+    if (dao.members.includes(address)) {
+      dao.members = dao.members.filter(m => m !== address);
+    } else {
+      dao.members.push(address);
+    }
+    
+    await dao.save();
 
-    await DAOCollection.updateOne(id, data);
-
-    response.json(res);
+    response.json({ success: true });
   } catch (error) {
     console.log("error: ", error);
     response.status(400).send({
