@@ -37,3 +37,9 @@ bun.lockb
 
 # Local Netlify folder
 .netlify
+
+# Claude
+.claude/
+
+# Misc
+deno.lock

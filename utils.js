@@ -80,13 +80,18 @@ const getUserBalanceAtLevel = async (
 const getUserXTZBalanceAtLevelViaRpc = async (network, level, userAddress) => {
   const rpcUrl = rpcNodes[network];
   const url = `${rpcUrl}/chains/main/blocks/${level}/context/contracts/${userAddress}/full_balance`;
-  console.log("url: ", url);
-  const response = await axios({ url, method: "GET" });
-  
-  if (response.status === 200) {
-    return new BigNumber(response.data);
+
+  try {
+    const response = await axios({ url, method: "GET" });
+    if (response.status === 200) {
+      return new BigNumber(response.data);
+    }
+  } catch (error) {
+    // RPC failed (likely historical block not available), fall back to TzKT
+    console.warn(`RPC failed for block ${level}, falling back to TzKT API`);
+    return await getUserXTZBalanceAtLevel(network, level, userAddress);
   }
-  
+
   return new BigNumber(0);
 };
 
