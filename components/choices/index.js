@@ -260,9 +260,10 @@ const updateChoiceById = async (req, response) => {
 
       if (isVoted.length > 0) {
         const oldVoteObj = isVoted[0].walletAddresses.find(x => x.address === address);
-        oldVote = await ChoiceModel.findById(oldVoteObj.choiceId);
+        // isVoted[0] is already the Choice document containing the old vote
+        oldVote = isVoted[0];
 
-        const oldSignaturePayload = oldVote.walletAddresses[0].payloadBytes
+        const oldSignaturePayload = oldVoteObj?.payloadBytes;
         if (oldSignaturePayload) {
           const oldSignatureDate =
             getTimestampFromPayloadBytes(oldSignaturePayload);
