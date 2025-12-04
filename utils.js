@@ -77,6 +77,24 @@ const getUserBalanceAtLevel = async (
   return new BigNumber(0);
 };
 
+const getUserXTZBalanceAtLevelViaRpc = async (network, level, userAddress) => {
+  const rpcUrl = rpcNodes[network];
+  const url = `${rpcUrl}/chains/main/blocks/${level}/context/contracts/${userAddress}/full_balance`;
+
+  try {
+    const response = await axios({ url, method: "GET" });
+    if (response.status === 200) {
+      return new BigNumber(response.data);
+    }
+  } catch (error) {
+    // RPC failed (likely historical block not available), fall back to TzKT
+    console.warn(`RPC failed for block ${level}, falling back to TzKT API`);
+    return await getUserXTZBalanceAtLevel(network, level, userAddress);
+  }
+
+  return new BigNumber(0);
+};
+
 const getUserXTZBalanceAtLevel = async (network, level, userAddress) => {
   const url = `https://api.${network}.tzkt.io/v1/accounts/${userAddress}/balance_history/${level}`;
   const response = await axios({ url, method: "GET" });
@@ -173,11 +191,18 @@ const getUserTotalVotingPowerAtReferenceBlock = async (
 
     return userVotingPower;
   } else {
-    const selfBalance = await getUserXTZBalanceAtLevel(
+    const selfBalance = await getUserXTZBalanceAtLevelViaRpc(
       network,
       level,
       userAddress
     );
+    const selfBalanceLegacy = await getUserXTZBalanceAtLevel(
+      network,
+      level,
+      userAddress
+    );
+    console.log("selfBalance: ", selfBalance);
+    console.log("selfBalanceLegacy: ", selfBalanceLegacy);
     return userVotingPower.plus(selfBalance);
   }
 };
