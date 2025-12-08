@@ -16,6 +16,25 @@ const PollModel = require("../../db/models/Poll.model");
 const ChoiceModel = require("../../db/models/Choice.model");
 const { getEthUserBalanceAtLevel } = require("../../utils-eth");
 
+// Simple in-memory lock to prevent race conditions on concurrent votes
+const voteLocks = new Map();
+
+async function withVoteLock(pollID, address, fn) {
+  const key = `${pollID}:${address}`;
+
+  // Wait if another request is processing this voter
+  while (voteLocks.has(key)) {
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
+
+  voteLocks.set(key, true);
+  try {
+    return await fn();
+  } finally {
+    voteLocks.delete(key);
+  }
+}
+
 const getChoiceById = async (req, response) => {
   const { id } = req.params;
 
@@ -252,13 +271,15 @@ const updateChoiceById = async (req, response) => {
         throw new Error("No balance at proposal level");
       }
 
-      const isVoted = await ChoiceModel.find({
-        pollID: poll._id,
-        walletAddresses: { $elemMatch: { address: address } },
-      }).lean();
-      console.log("[choices.update:tz:is-voted]", { reqId, count: isVoted?.length || 0 });
+      // Acquire lock to prevent race condition on concurrent votes
+      await withVoteLock(pollID, address, async () => {
+        const isVoted = await ChoiceModel.find({
+          pollID: poll._id,
+          walletAddresses: { $elemMatch: { address: address } },
+        }).lean();
+        console.log("[choices.update:tz:is-voted]", { reqId, count: isVoted?.length || 0 });
 
-      if (isVoted.length > 0) {
+        if (isVoted.length > 0) {
         const oldVoteObj = isVoted[0].walletAddresses.find(x => x.address === address);
         // isVoted[0] is already the Choice document containing the old vote
         oldVote = isVoted[0];
@@ -365,6 +386,7 @@ const updateChoiceById = async (req, response) => {
           }
         })
       );
+      }); // end withVoteLock
 
       console.log("[choices.update:tz:success]", { reqId });
       response.json({ success: true });
