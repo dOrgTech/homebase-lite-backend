@@ -17,9 +17,10 @@ const getTotalSupplyAtCurrentBlock = async (network, address, tokenID) => {
   const url = `https://api.${network}.tzkt.io/v1/tokens?contract=${address}&tokenId=${tokenID}`;
   const response = await axios({ url, method: "GET" });
 
-  if (response.status === 200) {
+  if (response.status === 200 && response.data && response.data.length > 0) {
     return response.data[0].totalSupply;
   }
+  return undefined;
 };
 
 const getCurrentBlock = async (network) => {
@@ -59,14 +60,36 @@ const getUserBalanceAtLevel = async (
   userAddress
 ) => {
   const url = `https://api.${network}.tzkt.io/v1/tokens/historical_balances/${level}?account=${userAddress}&token.contract=${address}&token.tokenId=${tokenID}`;
-  const response = await axios({ url, method: "GET" });
-  if (response.status === 200) {
-    const result = response.data;
-    if (result.length > 0) {
-      return new BigNumber(result[0].balance);
-    } else {
-      return new BigNumber(0);
+  try {
+    const response = await axios({ url, method: "GET" });
+    if (response.status === 200) {
+      const result = response.data;
+      if (result && result.length > 0 && result[0].balance !== undefined) {
+        return new BigNumber(result[0].balance);
+      } else {
+        return new BigNumber(0);
+      }
     }
+  } catch (error) {
+    // Handle error case
+  }
+
+  return new BigNumber(0);
+};
+
+const getUserXTZBalanceAtLevelViaRpc = async (network, level, userAddress) => {
+  const rpcUrl = rpcNodes[network];
+  const url = `${rpcUrl}/chains/main/blocks/${level}/context/contracts/${userAddress}/full_balance`;
+
+  try {
+    const response = await axios({ url, method: "GET" });
+    if (response.status === 200) {
+      return new BigNumber(response.data);
+    }
+  } catch (error) {
+    // RPC failed (likely historical block not available), fall back to TzKT
+    console.warn(`RPC failed for block ${level}, falling back to TzKT API`);
+    return await getUserXTZBalanceAtLevel(network, level, userAddress);
   }
 
   return new BigNumber(0);
@@ -168,11 +191,18 @@ const getUserTotalVotingPowerAtReferenceBlock = async (
 
     return userVotingPower;
   } else {
-    const selfBalance = await getUserXTZBalanceAtLevel(
+    const selfBalance = await getUserXTZBalanceAtLevelViaRpc(
       network,
       level,
       userAddress
     );
+    const selfBalanceLegacy = await getUserXTZBalanceAtLevel(
+      network,
+      level,
+      userAddress
+    );
+    console.log("selfBalance: ", selfBalance);
+    console.log("selfBalanceLegacy: ", selfBalanceLegacy);
     return userVotingPower.plus(selfBalance);
   }
 };
@@ -200,7 +230,10 @@ const getTokenHoldersCount = async (network, address, tokenID) => {
   }
   const result = response.data;
 
-  return result[0].holdersCount;
+  if (result && result.length > 0 && result[0].holdersCount !== undefined) {
+    return result[0].holdersCount;
+  }
+  return 0;
 };
 
 const getTimestampFromPayloadBytes = (payloadBytes) => {

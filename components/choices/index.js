@@ -1,8 +1,6 @@
 const mongoose = require("mongoose");
 const express = require("express");
 const md5 = require("md5");
-// This will help us connect to the database
-const dbo = require("../../db/conn");
 const {
   getInputFromSigPayload,
   getTimestampFromPayloadBytes,
@@ -18,20 +16,30 @@ const PollModel = require("../../db/models/Poll.model");
 const ChoiceModel = require("../../db/models/Choice.model");
 const { getEthUserBalanceAtLevel } = require("../../utils-eth");
 
-// This help convert the id from string to ObjectId for the _id.
-const ObjectId = require("mongodb").ObjectId;
+// Simple in-memory lock to prevent race conditions on concurrent votes
+const voteLocks = new Map();
+
+async function withVoteLock(pollID, address, fn) {
+  const key = `${pollID}:${address}`;
+
+  // Wait if another request is processing this voter
+  while (voteLocks.has(key)) {
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
+
+  voteLocks.set(key, true);
+  try {
+    return await fn();
+  } finally {
+    voteLocks.delete(key);
+  }
+}
 
 const getChoiceById = async (req, response) => {
   const { id } = req.params;
 
   try {
-    const choices = [];
-    let db_connect = dbo.getDb("Lite");
-    const cursor = await db_connect
-      .collection("Choices")
-      .find({ pollID: ObjectId(id) });
-
-    await cursor.forEach((elem) => choices.push(elem));
+    const choices = await ChoiceModel.find({ pollID: id }).lean();
     return response.json(choices);
   } catch (error) {
     console.log("error: ", error);
@@ -44,17 +52,20 @@ const getChoiceById = async (req, response) => {
 const updateChoiceById = async (req, response) => {
   const { payloadBytes, publicKey, signature } = req.body;
   const network = req.body.network;
+  const reqId = req.id || "no-reqid";
+  console.log("[choices.update:start]", { reqId, network, path: req.originalUrl });
   let j = 0;
   let i = 0;
   const timeNow = new Date().valueOf();
 
   if (network?.startsWith("etherlink")) {
     try {
-      console.log('[payload]', req.payloadObj)
+      console.log("[choices.update:eth:payload]", { reqId, length: Array.isArray(req.payloadObj) ? req.payloadObj.length : -1 });
       const castedChoices = req.payloadObj;
       if (castedChoices.length === 0) throw new Error("No choices sent in the request");
       const address = castedChoices[0].address
       const pollId = castedChoices[0].pollID
+      console.log("[choices.update:eth:fetch-poll]", { reqId, pollId });
       const poll = await PollModel.findById(pollId)
 
       if(!poll) throw new Error("Poll not found")
@@ -68,6 +79,7 @@ const updateChoiceById = async (req, response) => {
       } else {
         daoFindQuery.address = { $regex: new RegExp(`^${poll.daoID}$`, 'i') };
       }
+      console.log("[choices.update:eth:find-dao]", { reqId, daoFindQuery });
       const dao = await DAOModel.findOne(daoFindQuery)
       if (!dao) throw new Error(`DAO not found: ${poll.daoID}`)
 
@@ -89,8 +101,9 @@ const updateChoiceById = async (req, response) => {
       );
       if (duplicates.length > 0) throw new Error("Duplicate choices found");
 
+      console.log("[choices.update:eth:balance-request]", { reqId, net: dao.network || network, address, token: dao.tokenAddress, block });
       const total = await getEthUserBalanceAtLevel(dao.network || network, address, dao.tokenAddress, block)
-      console.log("EthTotal_UserBalance: ", total)
+      console.log("[choices.update:eth:balance-response]", { reqId, total: total?.toString?.() || total });
 
       if (!total) {
         throw new Error("Could not get total power at reference block");
@@ -104,6 +117,7 @@ const updateChoiceById = async (req, response) => {
         pollId: poll._id,
         walletAddresses: { $elemMatch: { address: address } }
       });
+      console.log("[choices.update:eth:is-voted]", { reqId, count: isVoted?.length || 0 });
 
 
       const walletVote = {
@@ -117,6 +131,7 @@ const updateChoiceById = async (req, response) => {
       if (isVoted.length > 0) {
         const oldVoteObj = isVoted[0].walletAddresses.find(x => x.address === address);
         oldVote = await ChoiceModel.findById(oldVoteObj.choiceId);
+        console.log("[choices.update:eth:old-vote]", { reqId, hasOld: Boolean(oldVote) });
 
         // TODO: Enable Repeat Vote
         // const oldSignaturePayload = oldVote.walletAddresses[0].payloadBytes
@@ -146,6 +161,7 @@ const updateChoiceById = async (req, response) => {
               { _id: choiceId },
               updatePayload
             )
+            console.log("[choices.update:eth:update-one]", { reqId, choiceId });
           } else {
             await ChoiceModel.updateMany(
               { pollID: poll._id },
@@ -157,6 +173,7 @@ const updateChoiceById = async (req, response) => {
               updatePayload,
               { upsert: true }
             )
+            console.log("[choices.update:eth:update-many-one]", { reqId, choiceId });
           }
         }
 
@@ -168,15 +185,16 @@ const updateChoiceById = async (req, response) => {
         for(const choice of castedChoices){
           const choiceId = choice.choiceId
           await ChoiceModel.updateOne(
-            {_id: ObjectId(choiceId)}, 
+            {_id: choiceId},
             {$push: {walletAddresses: walletVote}
           })
+          console.log("[choices.update:eth:initial-vote]", { reqId, choiceId });
         }
       }
       return response.json({ success: true });
     }
     catch (error) {
-      console.log("error: ", error);
+      console.error("[choices.update:eth:error]", { reqId, error: error?.message, stack: error?.stack });
       return response.status(400).send({
         message: error.message,
       });
@@ -185,35 +203,34 @@ const updateChoiceById = async (req, response) => {
   else {
     try {
       let oldVote = null;
+      console.log("[choices.update:tz:parse]", { reqId, payloadBytesLen: payloadBytes?.length });
       const values = getInputFromSigPayload(payloadBytes);
+      console.log("[choices.update:tz:values]", { reqId, count: values?.length || 0 });
 
       const payloadDate = getTimestampFromPayloadBytes(payloadBytes);
-
-      let db_connect = dbo.getDb("Lite");
+      console.log("[choices.update:tz:payload-date]", { reqId, payloadDate });
 
       const pollID = values[0].pollID;
+      console.log("[choices.update:tz:poll-id]", { reqId, pollID });
 
-      const poll = await db_connect
-        .collection("Polls")
-        .findOne({ _id: ObjectId(pollID) });
+      const poll = await PollModel.findById(pollID);
+      console.log("[choices.update:tz:poll]", { reqId, found: Boolean(poll) });
 
       if (timeNow > poll.endTime) {
         throw new Error("Proposal Already Ended");
       }
 
-      const dao = await db_connect
-        .collection("DAOs")
-        .findOne({ _id: ObjectId(poll.daoID) });
+      const dao = await DAOModel.findById(poll.daoID);
+      console.log("[choices.update:tz:dao]", { reqId, found: Boolean(dao) });
 
-      const token = await db_connect
-        .collection("Tokens")
-        .findOne({ tokenAddress: dao.tokenAddress });
+      const token = await TokenModel.findOne({ tokenAddress: dao.tokenAddress });
+      console.log("[choices.update:tz:token]", { reqId, tokenAddress: token?.tokenAddress });
 
       const block = poll.referenceBlock;
 
       const address = getPkhfromPk(publicKey);
+      console.log("[choices.update:tz:address]", { reqId, address });
 
-      // Validate values
       if (values.length === 0) {
         throw new Error("No choices sent in the request");
       }
@@ -244,6 +261,7 @@ const updateChoiceById = async (req, response) => {
         address,
         poll.isXTZ
       );
+      console.log("[choices.update:tz:total]", { reqId, total: total?.toString?.() || total });
 
       if (!total) {
         throw new Error("Could not get total power at reference block");
@@ -252,22 +270,21 @@ const updateChoiceById = async (req, response) => {
       if (total.eq(0)) {
         throw new Error("No balance at proposal level");
       }
-      const isVoted = await db_connect
-        .collection('Choices')
-        .find({
+
+      // Acquire lock to prevent race condition on concurrent votes
+      await withVoteLock(pollID, address, async () => {
+        const isVoted = await ChoiceModel.find({
           pollID: poll._id,
           walletAddresses: { $elemMatch: { address: address } },
-        })
-        .toArray();
+        }).lean();
+        console.log("[choices.update:tz:is-voted]", { reqId, count: isVoted?.length || 0 });
 
-
-      if (isVoted.length > 0) {
+        if (isVoted.length > 0) {
         const oldVoteObj = isVoted[0].walletAddresses.find(x => x.address === address);
-        oldVote = await db_connect.collection("Choices").findOne({
-          _id: ObjectId(oldVoteObj.choiceId),
-        });
+        // isVoted[0] is already the Choice document containing the old vote
+        oldVote = isVoted[0];
 
-        const oldSignaturePayload = oldVote.walletAddresses[0].payloadBytes
+        const oldSignaturePayload = oldVoteObj?.payloadBytes;
         if (oldSignaturePayload) {
           const oldSignatureDate =
             getTimestampFromPayloadBytes(oldSignaturePayload);
@@ -278,18 +295,6 @@ const updateChoiceById = async (req, response) => {
         }
       }
 
-      // const ipfsProof = getIPFSProofFromPayload(payloadBytes, signature)
-      // const cidLink = await uploadToIPFS(ipfsProof).catch(error => {
-      //   console.error('IPFS Error', error)
-      //   return null;
-      // });
-      // if (!cidLink) {
-      //   throw new Error(
-      //     "Could not upload proof to IPFS, Vote was not registered. Please try again later"
-      //   );
-      // }
-
-      // TODO: Optimize this Promise.all
       await Promise.all(
         values.map(async (value) => {
           const { choiceId } = value;
@@ -302,138 +307,91 @@ const updateChoiceById = async (req, response) => {
             signature,
           };
 
-          // TODO: Enable this when the IPFS CID is added to the walletVote object
-          // walletVote.cidLink = cidLink;
+          const choice = await ChoiceModel.findById(choiceId);
 
-          const choice = await db_connect
-            .collection("Choices")
-            .findOne({ _id: ObjectId(choiceId) });
           if (isVoted.length > 0) {
             if (poll.votingStrategy === 0) {
-              const mongoClient = dbo.getClient();
-              const session = mongoClient.startSession();
-
-              let newData = {
-                $push: {
-                  walletAddresses: walletVote,
-                },
-              };
-
-              let remove = {
-                $pull: {
-                  walletAddresses: {
-                    address,
-                  },
-                },
-              };
+              const session = await mongoose.startSession();
+              session.startTransaction();
 
               try {
-                await session.withTransaction(async () => {
-                  const coll1 = db_connect.collection("Choices");
-                  // const coll2 = db_connect.collection("Polls");
+                if (oldVote) {
+                  await ChoiceModel.updateOne(
+                    { _id: oldVote._id },
+                    { $pull: { walletAddresses: { address } } },
+                    { session }
+                  );
+                }
 
+                await ChoiceModel.updateOne(
+                  { _id: choice._id },
+                  { $push: { walletAddresses: walletVote } },
+                  { session }
+                );
 
-                  // Important:: You must pass the session to the operations
-                  if (oldVote) {
-                    await coll1.updateOne(
-                      { _id: ObjectId(oldVote._id) },
-                      remove,
-                      { remove: true },
-                      { session }
-                    );
-                  }
-
-                  await coll1.updateOne({ _id: ObjectId(choice._id) }, newData, {
-                    session,
-                  });
-                });
-                // .then((res) => response.json({ success: true }));
+                await session.commitTransaction();
               } catch (e) {
-                result = e.Message;
-                console.log(e);
+                console.error("[choices.update:tz:tx-error]", { reqId, error: e?.message, stack: e?.stack });
                 await session.abortTransaction();
-                throw new Error(e);
+                console.log(e);
+                throw e;
               } finally {
                 await session.endSession();
               }
             } else {
-              const mongoClient = dbo.getClient();
-              const session = mongoClient.startSession();
+              const session = await mongoose.startSession();
+              session.startTransaction();
 
               const distributedWeight = total.div(new BigNumber(values.length));
-
               walletVote.balanceAtReferenceBlock = distributedWeight.toString();
 
-              let remove = {
-                $pull: {
-                  walletAddresses: { address: address },
-                },
-              };
-
               try {
-                // FIRST REMOVE OLD ADDRESS VOTES
-                // Fix All polls votes removed
-                await db_connect
-                  .collection("Choices")
-                  .updateMany({ pollID: poll._id }, remove, { remove: true });
+                await ChoiceModel.updateMany(
+                  { pollID: poll._id },
+                  { $pull: { walletAddresses: { address } } },
+                  { session }
+                );
 
-                await session
-                  .withTransaction(async () => {
-                    const coll1 = db_connect.collection("Choices");
-                    await coll1.updateOne(
-                      {
-                        _id: choice._id,
-                      },
-                      { $push: { walletAddresses: walletVote } },
-                      { upsert: true }
-                    );
+                await ChoiceModel.updateOne(
+                  { _id: choice._id },
+                  { $push: { walletAddresses: walletVote } },
+                  { session, upsert: true }
+                );
 
-                    i++;
-                  })
-                  .then((res) => {
-                    if (i === values.length) {
-                      // response.json({ success: true });
-                    }
-                  });
+                await session.commitTransaction();
+                i++;
               } catch (e) {
-                result = e.Message;
-                console.log(e);
+                console.error("[choices.update:tz:tx-error]", { reqId, error: e?.message, stack: e?.stack });
                 await session.abortTransaction();
-                throw new Error(e);
+                console.log(e);
+                throw e;
               } finally {
                 await session.endSession();
               }
             }
           } else {
-            let newId = { _id: ObjectId(choice._id) };
-
             if (values.length > 1) {
               const distributedWeight = total.div(new BigNumber(values.length));
               walletVote.balanceAtReferenceBlock = distributedWeight.toString();
             }
-            let data = {
-              $push: {
-                walletAddresses: walletVote,
-              },
-            };
-            const res = await db_connect
-              .collection("Choices")
-              .updateOne(newId, data, { upsert: true });
+
+            await ChoiceModel.updateOne(
+              { _id: choice._id },
+              { $push: { walletAddresses: walletVote } },
+              { upsert: true }
+            );
+            console.log("[choices.update:tz:initial-vote]", { reqId, choiceId: choice._id });
 
             j++;
-
-            if (j === values.length) {
-              // response.json({ success: true });
-            } else {
-              return;
-            }
           }
         })
       );
+      }); // end withVoteLock
 
+      console.log("[choices.update:tz:success]", { reqId });
       response.json({ success: true });
     } catch (error) {
-      console.log("error: ", error);
+      console.error("[choices.update:tz:error]", { reqId, error: error?.message, stack: error?.stack });
       response.status(400).send({
         message: error.message,
       });
@@ -441,18 +399,12 @@ const updateChoiceById = async (req, response) => {
   }
 };
 
-// Get the user's choice
 const choicesByUser = async (req, response) => {
-  const { id } = req.params.id;
+  const { id } = req.params;
 
   try {
-    let db_connect = dbo.getDb();
-    const res = await db_connect
-      .collection("Choices")
-      .findOne({ "walletAddresses.address": id });
-
+    const res = await ChoiceModel.findOne({ "walletAddresses.address": id }).lean();
     response.json(res);
-
   } catch (error) {
     console.log("error: ", error);
     response.status(400).send({
@@ -465,12 +417,8 @@ const votesByUser = async (req, response) => {
   const { id } = req.params;
 
   try {
-    const choices = [];
-    let db_connect = dbo.getDb("Lite");
-    const cursor = await db_connect.collection("Choices").find({ "walletAddresses.address": id });
-    await cursor.forEach((elem) => choices.push(elem));
+    const choices = await ChoiceModel.find({ "walletAddresses.address": id }).lean();
     return response.json(choices);
-
   } catch (error) {
     console.log("error: ", error);
     response.status(400).send({
@@ -484,13 +432,7 @@ const getPollVotes = async (req, response) => {
   let total = 0;
 
   try {
-    const choices = [];
-    let db_connect = dbo.getDb("Lite");
-    const cursor = await db_connect.collection("Choices").find({
-      pollID: ObjectId(id),
-    });
-
-    await cursor.forEach((elem) => choices.push(elem));
+    const choices = await ChoiceModel.find({ pollID: id }).lean();
     choices.forEach((choice) => (total += choice.walletAddresses.length));
     return response.json(total);
   } catch (error) {

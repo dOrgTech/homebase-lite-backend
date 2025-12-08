@@ -1,8 +1,7 @@
 const md5 = require('md5');
+const mongoose = require("mongoose");
 
-// This will help us connect to the database
 const { getPkhfromPk } = require("@taquito/utils");
-const dbo = require("../../db/conn");
 const {
   getInputFromSigPayload,
   getCurrentBlock,
@@ -20,7 +19,12 @@ const ChoiceModel = require("../../db/models/Choice.model");
 
 const { getEthCurrentBlockNumber, getEthTotalSupply } = require("../../utils-eth");
 
-const ObjectId = require("mongodb").ObjectId;
+function validateExternalLink(externalLink) {
+  if (!externalLink || typeof externalLink !== 'string') {
+    return '';
+  }
+  return externalLink.startsWith('https://') ? externalLink : '';
+}
 
 async function _getPollData(mode="lite", {
   daoId, network, tokenAddress = null, authorAddress = null, payloadBytes = null
@@ -105,14 +109,22 @@ const getPollById = async (req, response) => {
   const { id } = req.params;
 
   try {
-    let db_connect = dbo.getDb();
-    let pollId = { _id: ObjectId(id) };
+    const result = await PollModel.findById(id).lean();
+    
+    if (!result) {
+      return response.status(404).json({
+        message: "Poll not found",
+      });
+    }
+    
+    // No Sanitization for Tezos Ecosystem
+    let shouldSkipSanitzation = result?.daoID === "64ef1c7d514de7b078cb8ed2"
 
-    const result = await db_connect.collection("Polls").findOne(pollId);
     response.json({
       ...result,
       name: result.name?.replace(/<[^>]*>/g, ''),
-      description: result.description?.replace(/<[^>]*>/g, ''),
+      description: shouldSkipSanitzation ? result.description : result.description?.replace(/<[^>]*>/g, ''),
+      externalLink: validateExternalLink(result.externalLink),
     });
   } catch (error) {
     console.log("error: ", error);
@@ -124,17 +136,23 @@ const getPollById = async (req, response) => {
 
 const getPollsById = async (req, response) => {
   const { id } = req.params;
+  let shouldSkipSanitzation = false;
 
   try {
-    let db_connect = dbo.getDb();
-
-    const polls = await db_connect
-      .collection("Polls")
-      .find({ daoID: id })
+    const polls = await PollModel.find({ daoID: id })
       .sort({ _id: -1 })
-      .toArray();
+      .lean();
 
-    response.json(polls);
+      const pollsFilltered = polls.map(poll => {
+        return {
+          ...poll,
+          name: poll.name.replace(/<[^>]*>/g, ''),
+          description: poll.description.replace(/<[^>]*>/g, ''),
+          externalLink: validateExternalLink(poll.externalLink),
+        }
+      })
+
+    response.json(pollsFilltered);
   } catch (error) {
     console.log("error: ", error);
     response.status(400).send({
@@ -208,7 +226,7 @@ const addPoll = async (req, response) => {
         name,
         author,
         description,
-        externalLink,
+        externalLink: validateExternalLink(externalLink),
         startTime,
         endTime,
         daoID,
@@ -244,7 +262,7 @@ const addPoll = async (req, response) => {
 
       if(daoMode == "lite"){
         await DaoModel.updateOne(
-          { _id: ObjectId(daoID) },
+          { _id: daoID },
           {
             $push: { polls: pollId },
           }
@@ -257,7 +275,7 @@ const addPoll = async (req, response) => {
             tokenAddress: payload?.tokenAddress,
             tokenType:"erc20",
             $push: { polls: pollId },
-            votingAddressesCount: 0 // TODO: @ashutoshpw
+            votingAddressesCount: 0
           },
           { upsert: true, new: true }
         );
@@ -289,14 +307,7 @@ const addPoll = async (req, response) => {
 
       const author = getPkhfromPk(publicKey);
 
-      const mongoClient = dbo.getClient();
-      const session = mongoClient.startSession();
-      let db_connect = dbo.getDb();
-
-      const poll_id = ObjectId();
-
       const currentTime = new Date().valueOf();
-
       const startTime = currentTime;
 
       if (choices.length === 0) {
@@ -314,16 +325,12 @@ const addPoll = async (req, response) => {
         throw new Error("Duplicate choices found");
       }
 
-      const dao = await db_connect
-        .collection("DAOs")
-        .findOne({ _id: ObjectId(daoID) });
+      const dao = await DaoModel.findById(daoID);
       if (!dao) {
         throw new Error("DAO Does not exist");
       }
 
-      const token = await db_connect
-        .collection("Tokens")
-        .findOne({ tokenAddress: dao.tokenAddress });
+      const token = await TokenModel.findOne({ tokenAddress: dao.tokenAddress });
       if (!token) {
         throw new Error("DAO Token Does not exist in system");
       }
@@ -352,84 +359,68 @@ const addPoll = async (req, response) => {
       }
 
       if (!total) {
-        await session.abortTransaction();
+        throw new Error("Could not fetch total supply");
       }
 
-      const choicesData = choices.map((element) => {
-        return {
-          name: element,
-          pollID: poll_id,
-          walletAddresses: [],
-          _id: ObjectId(),
-        };
-      });
-      const choicesPoll = choicesData.map((element) => {
-        return element._id;
-      });
-
-      const doesPollExists = await db_connect
-        .collection("Polls")
-        .findOne({ payloadBytes });
+      const doesPollExists = await PollModel.findOne({ payloadBytes });
 
       if (doesPollExists) {
         throw new Error("Invalid Signature, Poll already exists");
       }
 
-      // const cidLink = await uploadToIPFS(
-      //   getIPFSProofFromPayload(payloadBytes, signature)
-      // );
-      // if (!cidLink) {
-      //   throw new Error(
-      //     "Could not upload proof to IPFS, Vote was not registered. Please try again later"
-      //   );
-      // }
-
-      let PollData = {
-        name,
-        description,
-        externalLink,
-        startTime,
-        endTime,
-        daoID,
-        referenceBlock: block,
-        totalSupplyAtReferenceBlock: total,
-        _id: poll_id,
-        choices: choicesPoll,
-        author,
-        votingStrategy,
-        isXTZ,
-        payloadBytes,
-        signature,
-        cidLink: "",
-      };
-
-      let data = {
-        $push: {
-          polls: poll_id,
-        },
-      };
-
-      let id = { _id: ObjectId(daoID) };
+      const session = await mongoose.startSession();
+      session.startTransaction();
 
       try {
-        await session
-          .withTransaction(async () => {
-            const coll1 = db_connect.collection("Polls");
-            const coll2 = db_connect.collection("Choices");
-            const coll3 = db_connect.collection("DAOs");
-            // Important:: You must pass the session to the operations
-            await coll1.insertOne(PollData, { session });
+        const PollData = {
+          name,
+          description,
+          externalLink: validateExternalLink(externalLink),
+          startTime,
+          endTime,
+          daoID,
+          referenceBlock: block,
+          totalSupplyAtReferenceBlock: total,
+          author,
+          votingStrategy,
+          isXTZ,
+          payloadBytes,
+          signature,
+          cidLink: "",
+        };
 
-            await coll2.insertMany(choicesData, { session });
+        const createdPoll = await PollModel.create([PollData], { session });
+        const poll_id = createdPoll[0]._id;
 
-            await coll3.updateOne(id, data, { session });
-          })
-          .then((res) => response.json({ res, pollId: poll_id }));
+        const choicesData = choices.map((element) => {
+          return {
+            name: element,
+            pollID: poll_id,
+            walletAddresses: [],
+          };
+        });
+
+        const createdChoices = await ChoiceModel.insertMany(choicesData, { session });
+        const choicesPoll = createdChoices.map((element) => element._id);
+
+        await PollModel.updateOne(
+          { _id: poll_id },
+          { $set: { choices: choicesPoll } },
+          { session }
+        );
+
+        await DaoModel.updateOne(
+          { _id: daoID },
+          { $push: { polls: poll_id } },
+          { session }
+        );
+
+        await session.commitTransaction();
+        response.json({ pollId: poll_id });
       } catch (e) {
-        result = e.Message;
-        console.log(e);
         await session.abortTransaction();
-        throw new Error(e);
+        console.log(e);
+        throw e;
       } finally {
         await session.endSession();
       }

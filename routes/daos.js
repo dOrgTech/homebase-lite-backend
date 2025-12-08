@@ -164,6 +164,7 @@ daoRoutes.route("/daos/create/voting").get(updateTotalHolders);
  *         description: Invalid signature payload
  */
 daoRoutes.route("/daos/count/:id").post(updateTotalCount);
+daoRoutes.route("/daos/:id/count").get(updateTotalCount);
 
 
 module.exports = daoRoutes;

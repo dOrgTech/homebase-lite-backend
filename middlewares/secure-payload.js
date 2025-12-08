@@ -1,9 +1,76 @@
-const createDOMPurify = require('dompurify');
-const { JSDOM } = require('jsdom');
+let DOMPurify;
 
-// Create a DOMPurify instance with a virtual DOM
-const window = new JSDOM('').window;
-const DOMPurify = createDOMPurify(window);
+function getDOMPurify() {
+  if (!DOMPurify) {
+    const createDOMPurify = require('dompurify');
+    const { JSDOM } = require('jsdom');
+    const window = new JSDOM('').window;
+    DOMPurify = createDOMPurify(window);
+    
+    DOMPurify.setConfig({
+      KEEP_CONTENT: true,
+      RETURN_DOM: false,
+      RETURN_DOM_FRAGMENT: false,
+      RETURN_DOM_IMPORT: false,
+      WHOLE_DOCUMENT: false,
+      FORCE_BODY: false,
+      ADD_TAGS: ['summary', 'details', 'caption', 'figure', 'figcaption'],
+      FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'form', 'input', 'button', 'base'],
+      FORBID_ATTR: [
+        'onerror', 'onload', 'onclick', 'onmouseover', 'onmouseout', 'onmouseenter', 'onmouseleave',
+        'onfocus', 'onblur', 'onchange', 'onsubmit', 'onreset', 'onselect', 'onabort',
+        'ping', 'formaction', 'action', 'method'
+      ]
+    });
+    
+    DOMPurify.addHook('afterSanitizeAttributes', node => {
+      if (node.hasAttribute('style')) {
+        const styleAttr = node.getAttribute('style');
+        const cleanedStyle = removePositioningStyles(styleAttr);
+        
+        if (cleanedStyle !== styleAttr) {
+          if (cleanedStyle.trim()) {
+            node.setAttribute('style', cleanedStyle);
+          } else {
+            node.removeAttribute('style');
+          }
+        }
+      }
+      
+      if (node.hasAttribute('href')) {
+        const href = node.getAttribute('href');
+        if (/^\s*(?:javascript|data|vbscript|file):/i.test(href)) {
+          node.removeAttribute('href');
+        }
+      }
+      
+      if (node.hasAttribute('src')) {
+        const src = node.getAttribute('src');
+        if (/^\s*(?:javascript|data|vbscript|file):/i.test(src)) {
+          node.removeAttribute('src');
+        }
+      }
+      
+      if (node.tagName === 'A') {
+        node.setAttribute('target', '_blank');
+        node.setAttribute('rel', 'nofollow noopener noreferrer');
+      }
+    });
+    
+    DOMPurify.addHook('uponSanitizeAttribute', (node, data) => {
+      if (data.attrName === 'style') {
+        data.attrValue = data.attrValue
+          .replace(/expression\s*\(.*\)/gi, '')
+          .replace(/url\s*\(\s*['"]*\s*javascript:/gi, '')
+          .replace(/url\s*\(\s*['"]*\s*data:/gi, '')
+          .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+          .replace(/<\/?\s*script\s*>/gi, '');
+      }
+    });
+  }
+  
+  return DOMPurify;
+}
 
 /**
  * Remove position:absolute and position:fixed from style strings
@@ -41,83 +108,6 @@ function removePositioningStyles(styleString) {
   return cleanedStyles ? cleanedStyles + ';' : '';
 }
 
-// Configure DOMPurify for security
-DOMPurify.setConfig({
-  KEEP_CONTENT: true,
-  RETURN_DOM: false,
-  RETURN_DOM_FRAGMENT: false,
-  RETURN_DOM_IMPORT: false,
-  WHOLE_DOCUMENT: false,
-  FORCE_BODY: false,
-  // Allow common HTML5 elements but restrict potentially dangerous ones
-  ADD_TAGS: ['summary', 'details', 'caption', 'figure', 'figcaption'],
-  // Restrict dangerous CSS properties beyond positioning
-  FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'form', 'input', 'button', 'base'],
-  FORBID_ATTR: [
-    // Event handlers
-    'onerror', 'onload', 'onclick', 'onmouseover', 'onmouseout', 'onmouseenter', 'onmouseleave',
-    'onfocus', 'onblur', 'onchange', 'onsubmit', 'onreset', 'onselect', 'onabort',
-    // Other dangerous attributes
-    'ping', 'formaction', 'action', 'method'
-  ]
-});
-
-// Configure DOMPurify hooks to remove position styling
-DOMPurify.addHook('afterSanitizeAttributes', node => {
-  // Clean style attributes
-  if (node.hasAttribute('style')) {
-    // Get the style attribute and clean it
-    const styleAttr = node.getAttribute('style');
-    const cleanedStyle = removePositioningStyles(styleAttr);
-    
-    // Set the cleaned style back
-    if (cleanedStyle !== styleAttr) {
-      if (cleanedStyle.trim()) {
-        node.setAttribute('style', cleanedStyle);
-      } else {
-        node.removeAttribute('style');
-      }
-    }
-  }
-  
-  // Clean href attributes to prevent javascript: URLs
-  if (node.hasAttribute('href')) {
-    const href = node.getAttribute('href');
-    if (/^\s*(?:javascript|data|vbscript|file):/i.test(href)) {
-      node.removeAttribute('href');
-    }
-  }
-  
-  // Clean src attributes
-  if (node.hasAttribute('src')) {
-    const src = node.getAttribute('src');
-    if (/^\s*(?:javascript|data|vbscript|file):/i.test(src)) {
-      node.removeAttribute('src');
-    }
-  }
-  
-  // Ensure all anchor links open in new window with security attributes
-  if (node.tagName === 'A') {
-    // Set target="_blank" to open in new window
-    node.setAttribute('target', '_blank');
-    // Set rel attribute for security
-    node.setAttribute('rel', 'nofollow noopener noreferrer');
-  }
-});
-
-// Add hook to clean CSS properties in style attributes
-DOMPurify.addHook('uponSanitizeAttribute', (node, data) => {
-  if (data.attrName === 'style') {
-    // Remove potentially dangerous CSS constructs (expression, url, etc.)
-    data.attrValue = data.attrValue
-      .replace(/expression\s*\(.*\)/gi, '')
-      .replace(/url\s*\(\s*['"]*\s*javascript:/gi, '')
-      .replace(/url\s*\(\s*['"]*\s*data:/gi, '')
-      // Remove script tags embedded in style attributes
-      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-      .replace(/<\/?\s*script\s*>/gi, '');
-  }
-});
 
 /**
  * Recursively sanitizes an object's string properties to prevent XSS attacks
@@ -126,11 +116,11 @@ DOMPurify.addHook('uponSanitizeAttribute', (node, data) => {
  * @returns {*} - The sanitized object
  */
 function sanitizeObject(obj, seen = new WeakSet()) {
-  // Handle primitives
+  const purify = getDOMPurify();
+  
   if (obj === null || typeof obj !== 'object') {
-    // Sanitize if it's a string
     if (typeof obj === 'string') {
-      return DOMPurify.sanitize(obj, {
+      return purify.sanitize(obj, {
         ALLOWED_TAGS: [
           'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'p', 'a', 'ul', 'ol',
           'li', 'b', 'i', 'strong', 'em', 'strike', 'code', 'hr', 'br', 'div',
@@ -173,19 +163,16 @@ function sanitizeObject(obj, seen = new WeakSet()) {
     return obj.map(item => sanitizeObject(item, seen));
   }
 
-  // Handle objects
   const sanitized = {};
   for (const key in obj) {
     if (Object.prototype.hasOwnProperty.call(obj, key)) {
       const value = obj[key];
       
       if (typeof value === 'string') {
-        // If it looks like a CSS style string directly (not in HTML)
         if (key === 'style' || key.endsWith('Style') || key.includes('style')) {
           sanitized[key] = removePositioningStyles(value);
         } else {
-          // Sanitize the string value while preserving legitimate HTML from WYSIWYG
-          sanitized[key] = DOMPurify.sanitize(value, {
+          sanitized[key] = purify.sanitize(value, {
             ALLOWED_TAGS: [
               'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'p', 'a', 'ul', 'ol',
               'li', 'b', 'i', 'strong', 'em', 'strike', 'code', 'hr', 'br', 'div',

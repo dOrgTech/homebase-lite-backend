@@ -1,30 +1,23 @@
-// This will help us connect to the database
 const mongoose = require("mongoose");
-const mongodb = require("mongodb");
-const dbo = require("../../db/conn");
 const TokenModel = require("../../db/models/Token.model");
 const DAOModel = require("../../db/models/Dao.model");
 const { getUserTotalVotingPowerAtReferenceBlock } = require("../../utils");
 const { getEthTokenMetadata, getEthUserBalanceAtLevel } = require("../../utils-eth");
-
-const ObjectId = mongodb.ObjectId;
 const addToken = async (req, response) => {
   const { daoID, tokenID, symbol, tokenAddress } = req.body;
 
   try {
-    let db_connect = dbo.getDb();
-    const TokensCollection = db_connect.collection("Tokens");
-
-    let data = {
+    const data = {
       daoID,
       tokenID,
       symbol,
       tokenAddress,
+      tokenType: "FA2",
+      decimals: "0"
     };
 
-    await TokensCollection.insertOne(data);
-
-    response.json(data);
+    const createdToken = await TokenModel.create(data);
+    response.json(createdToken);
   } catch (error) {
     console.log("error: ", error);
     response.status(400).send({
@@ -68,20 +61,13 @@ const getVotingPowerAtLevel = async (req, response) => {
   }
 
   try {
-    let db_connect = dbo.getDb();
-
-    const TokensCollection = db_connect.collection("Tokens");
-    const DAOCollection = db_connect.collection("DAOs");
-
-    let tokenAddress = { tokenAddress: address };
-    const token = await TokensCollection.findOne(tokenAddress);
+    const token = await TokenModel.findOne({ tokenAddress: address });
 
     if (!token) {
       throw new Error("Could not find token");
     }
 
-    let daoId = { _id: ObjectId(token.daoID) };
-    const dao = await DAOCollection.findOne(daoId);
+    const dao = await DAOModel.findById(token.daoID);
 
     const daoContract = dao?.daoContract;
 
