@@ -6,11 +6,13 @@ const nanoid = customAlphabet('1234567890abcdef', 16)
 const networkNameMap = {
   mainnet: "mainnet",
   ghostnet: "ghostnet",
+  shadownet: "shadownet",
 };
 
 const rpcNodes = {
   mainnet: "https://mainnet.api.tez.ie",
   ghostnet: "https://ghostnet.smartpy.io",
+  shadownet: "https://rpc.shadownet.teztnets.com",
 };
 
 const getTokenMetadata = async (contractAddress, network, tokenId) => {
