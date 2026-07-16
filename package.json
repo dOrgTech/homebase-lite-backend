@@ -44,5 +44,13 @@
     "mongodb-memory-server": "^9.1.4",
     "nodemon": "^3.1.0",
     "supertest": "^6.3.3"
+  },
+  "resolutions": {
+    "form-data": "^4.0.6",
+    "ws": "^8.21.1"
+  },
+  "overrides": {
+    "form-data": "^4.0.6",
+    "ws": "^8.21.1"
   }
 }
