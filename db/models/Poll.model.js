@@ -60,6 +60,39 @@ const PollModelSchema = new Schema({
     type: String,
     index: true, 
     sparse: true,
+  },
+  // Optional treasury transfer this poll is asking for.
+  fundingRequest: {
+    type: new Schema({
+      recipient: {
+        type: String,
+        required: true,
+      },
+      // Decimal string, at most 6 decimal places
+      amount: {
+        type: String,
+        required: true,
+      },
+    }, { _id: false }),
+    default: undefined,
+  },
+  // Set once the poll has been promoted to an on-chain DAO proposal.
+  onchainProposal: {
+    type: new Schema({
+      daoAddress: {
+        type: String,
+        required: true,
+      },
+      proposalKey: {
+        type: String,
+        required: true,
+      },
+      network: {
+        type: String,
+        required: true,
+      },
+    }, { _id: false }),
+    default: undefined,
   }
 },{
     timestamps: true,

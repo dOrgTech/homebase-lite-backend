@@ -34,6 +34,7 @@
     "mongoose": "^8.5.2",
     "nanoid": "^3.3.7",
     "nft.storage": "^7.1.1",
+    "nodemailer": "^10.0.9",
     "persistent-cache": "^1.1.2",
     "serverless-http": "^3.2.0",
     "swagger-jsdoc": "^6.2.8",
