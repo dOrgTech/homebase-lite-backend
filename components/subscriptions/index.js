@@ -123,6 +123,35 @@ const buildConfirmationEmail = ({ daoName, daoAddress, network, confirmToken, un
   };
 };
 
+const buildAlreadySubscribedEmail = ({ daoName, daoAddress, network, unsubscribeToken }) => {
+  const unsubLink = unsubscribeUrl(unsubscribeToken);
+  const daoLabel = daoName ? `${daoName} (${daoAddress})` : daoAddress;
+  const explanation = `This address is already subscribed to Homebase alerts for the DAO ${daoLabel} on ${network}. Nothing changed and you will keep receiving alerts as before.`;
+
+  const text = [
+    explanation,
+    "",
+    "If you did not request this, you can ignore this email.",
+    `Unsubscribe: ${unsubLink}`,
+  ].join("\n");
+
+  const html = [
+    `<p>${escapeHtml(explanation)}</p>`,
+    "<p>If you did not request this, you can ignore this email.</p>",
+    `<p><a href="${unsubLink}">Unsubscribe</a></p>`,
+  ].join("\n");
+
+  return {
+    subject: `You are already subscribed to Homebase alerts for ${daoName || daoAddress}`,
+    text,
+    html,
+    headers: {
+      "List-Unsubscribe": `<${unsubLink}>`,
+      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+    },
+  };
+};
+
 /**
  * POST /subscriptions
  * Always answers 200 { ok: true } for well formed input so that the endpoint
@@ -186,6 +215,16 @@ const createSubscription = async (req, response) => {
         daoAddress: subscription.daoAddress,
         network: subscription.network,
         confirmToken: subscription.confirmToken,
+        unsubscribeToken: subscription.unsubscribeToken,
+      });
+      await sendMail({ to: subscription.email, ...mail });
+    } else {
+      // Tell the mailbox owner rather than the page visitor, so the HTTP
+      // response stays identical and reveals nothing about the address.
+      const mail = buildAlreadySubscribedEmail({
+        daoName,
+        daoAddress: subscription.daoAddress,
+        network: subscription.network,
         unsubscribeToken: subscription.unsubscribeToken,
       });
       await sendMail({ to: subscription.email, ...mail });
