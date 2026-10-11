@@ -315,17 +315,15 @@ async function parseContractScript(c, initTokenTable = {}) {
     let token, counter = 0;
     const entryponts = Object.entries(c.entrypoints.entrypoints).reverse();
     if (entryponts.length == 0) {
-        console.log('Case 1')
         // handle the case of only "default" entrypoint
-        [token, counter] = parseSchema(
+        // (the semicolon matters: without it the line below is parsed as console.log(...)[token, counter] = ...)
+        ;[token, counter] = parseSchema(
             0,
             c.parameterSchema.generateSchema(),
             initTokenTable,
             "entrypoint"
         );
-        console.log('Token:', token)
     } else {
-        console.log('Case 2')
         // handle the case of multiple entrypoints
         const childrenToken = [];
         let childToken;
