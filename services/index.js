@@ -5,16 +5,20 @@ const nanoid = customAlphabet('1234567890abcdef', 16)
 
 const networkNameMap = {
   mainnet: "mainnet",
-  ghostnet: "ghostnet",
+  shadownet: "shadownet",
 };
 
 const rpcNodes = {
-  mainnet: "https://rpc.tzkt.io/mainnet",
-  ghostnet: "https://rpc.tzkt.io/ghostnet",
+  mainnet: process.env.RPC_URL_MAINNET || "https://tcinfra.net/rpc/tezos/mainnet",
+  shadownet: process.env.RPC_URL_SHADOWNET || "https://rpc.shadownet.teztnets.com",
 };
 
+// TzKT API base per network; TZKT_API_<NETWORK> overrides it (local sandbox)
+const tzktApi = (network) =>
+  (process.env[`TZKT_API_${String(network).toUpperCase()}`] || `https://api.${networkNameMap[network] || "mainnet"}.tzkt.io`).replace(/\/$/, "");
+
 const getTokenMetadata = async (contractAddress, network, tokenId) => {
-  const url = `https://api.${networkNameMap[network]}.tzkt.io/v1/tokens?contract=${contractAddress}&tokenId=${tokenId ?? 0}`;
+  const url = `${tzktApi(network)}/v1/tokens?contract=${contractAddress}&tokenId=${tokenId ?? 0}`;
 
   const response = await axios.get(url);
 

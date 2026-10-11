@@ -3,12 +3,12 @@ const { Schema } = require('@taquito/michelson-encoder');
 
 const networkNameMap = {
     mainnet: "mainnet",
-    ghostnet: "ghostnet",
+    shadownet: "shadownet",
 };
 
 const rpcNodes = {
-    mainnet: "https://mainnet.api.tez.ie",
-    ghostnet: "https://ghostnet.smartpy.io",
+    mainnet: process.env.RPC_URL_MAINNET || "https://tcinfra.net/rpc/tezos/mainnet",
+    shadownet: process.env.RPC_URL_SHADOWNET || "https://rpc.shadownet.teztnets.com",
 };
 
 function getFieldName(id) {
@@ -369,7 +369,7 @@ async function parseContractScript(c, initTokenTable = {}) {
 
 async function getContractEndpoints(network, contractAddress) {
     try {
-        const tezosNetwork = network === 'ghostnet' ? 'ghostnet' : 'mainnet'
+        const tezosNetwork = rpcNodes[network] ? network : 'mainnet'
         const tezos = new TezosToolkit(rpcNodes[tezosNetwork]);
         const contract = await tezos.contract.at(contractAddress);
         const endpoints = await parseContractScript(contract);
