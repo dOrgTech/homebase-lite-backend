@@ -93,7 +93,7 @@ describe("Subscriptions Routes", () => {
       expect(count).toBe(1);
     });
 
-    it("should not resend a confirmation email for an already confirmed subscription", async () => {
+    it("should send an already-subscribed notice instead of a confirmation for a confirmed subscription", async () => {
       await SubscriptionModel.create({
         email: "user@example.com",
         daoAddress: DAO_ADDRESS,
@@ -110,7 +110,13 @@ describe("Subscriptions Routes", () => {
         .expect(200);
 
       expect(response.body).toEqual({ ok: true });
-      expect(sendMail).not.toHaveBeenCalled();
+      expect(sendMail).toHaveBeenCalledTimes(1);
+      const mail = sendMail.mock.calls[0][0];
+      expect(mail.to).toBe("user@example.com");
+      expect(mail.subject).toMatch(/already subscribed/i);
+      expect(mail.text).not.toContain("/subscriptions/confirm/");
+      expect(mail.text).toContain(`/subscriptions/unsubscribe/${"b".repeat(64)}`);
+      expect(await SubscriptionModel.countDocuments({ email: "user@example.com" })).toBe(1);
     });
 
     it("should reject an invalid email address", async () => {
