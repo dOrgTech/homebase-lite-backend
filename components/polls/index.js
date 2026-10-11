@@ -1,7 +1,7 @@
 const md5 = require('md5');
 const mongoose = require("mongoose");
 
-const { getPkhfromPk } = require("@taquito/utils");
+const { getPkhfromPk, validateAddress, ValidationResult } = require("@taquito/utils");
 const {
   getInputFromSigPayload,
   getCurrentBlock,
@@ -18,6 +18,39 @@ const PollModel = require("../../db/models/Poll.model");
 const ChoiceModel = require("../../db/models/Choice.model");
 
 const { getEthCurrentBlockNumber, getEthTotalSupply } = require("../../utils-eth");
+
+/**
+ * Validate the optional funding request carried inside a signed poll payload.
+ * Returns undefined when nothing was requested, throws when the shape is wrong.
+ *
+ * @param {{recipient: string, amount: string}} [fundingRequest]
+ * @returns {{recipient: string, amount: string}|undefined}
+ */
+function validateFundingRequest(fundingRequest) {
+  if (fundingRequest === undefined || fundingRequest === null) {
+    return undefined;
+  }
+
+  if (typeof fundingRequest !== "object" || Array.isArray(fundingRequest)) {
+    throw new Error("Invalid funding request");
+  }
+
+  const { recipient, amount } = fundingRequest;
+
+  if (typeof recipient !== "string" || validateAddress(recipient) !== ValidationResult.VALID) {
+    throw new Error("Invalid funding request recipient");
+  }
+
+  // Decimal string with at most 6 decimals, strictly greater than zero.
+  if (typeof amount !== "string" || !/^\d+(\.\d{1,6})?$/.test(amount.trim())) {
+    throw new Error("Invalid funding request amount");
+  }
+  if (Number(amount) <= 0) {
+    throw new Error("Invalid funding request amount");
+  }
+
+  return { recipient, amount: amount.trim() };
+}
 
 function validateExternalLink(externalLink) {
   if (!externalLink || typeof externalLink !== 'string') {
@@ -181,6 +214,7 @@ const addPoll = async (req, response) => {
         isXTZ,
       } = payload;
       const daoID = payload?.daoID || payload?.daoId;
+      const fundingRequest = validateFundingRequest(payload?.fundingRequest);
       console.log("Payload", payload)
       if (choices.length === 0) {
         throw new Error("No choices sent in the request");
@@ -238,6 +272,7 @@ const addPoll = async (req, response) => {
         payloadBytes,
         payloadBytesHash,
         cidLink: "",
+        ...(fundingRequest ? { fundingRequest } : {}),
       };
 
       const createdPoll = await PollModel.create(PollData);
@@ -304,6 +339,8 @@ const addPoll = async (req, response) => {
         votingStrategy,
         isXTZ,
       } = values;
+
+      const fundingRequest = validateFundingRequest(values?.fundingRequest);
 
       const author = getPkhfromPk(publicKey);
 
@@ -387,6 +424,7 @@ const addPoll = async (req, response) => {
           payloadBytes,
           signature,
           cidLink: "",
+          ...(fundingRequest ? { fundingRequest } : {}),
         };
 
         const createdPoll = await PollModel.create([PollData], { session });
@@ -433,8 +471,97 @@ const addPoll = async (req, response) => {
   }
 };
 
+/**
+ * POST /polls/:id/link-proposal
+ *
+ * Records the on-chain proposal a lite poll was promoted to. The request is
+ * signed the same way poll creation and voting are, so requireSignature has
+ * already verified the signature by the time we get here; what is left is to
+ * check that the signer is allowed to link this particular poll.
+ *
+ * Authorized signers: the poll author, or the creator/admin of the poll's
+ * community. The DAO model has no dedicated admin field; the creator is the
+ * first entry of members (see createDAO, which seeds members with the
+ * creator's address), so that entry is treated as the admin.
+ */
+const linkProposal = async (req, response) => {
+  const { payloadBytes, publicKey } = req.body;
+  const network = req.body.network;
+  const { id } = req.params;
+
+  try {
+    let payload = req.payloadObj;
+    if (!payload) {
+      payload = getInputFromSigPayload(payloadBytes);
+    }
+
+    const { daoAddress, proposalKey } = payload || {};
+    const proposalNetwork = payload?.network || network;
+
+    if (typeof daoAddress !== "string" || validateAddress(daoAddress) !== ValidationResult.VALID) {
+      throw new Error("Invalid DAO address");
+    }
+    if (typeof proposalKey !== "string" || !proposalKey.trim()) {
+      throw new Error("Invalid proposal key");
+    }
+    if (typeof proposalNetwork !== "string" || !proposalNetwork.trim()) {
+      throw new Error("Invalid network");
+    }
+
+    if (!mongoose.isValidObjectId(id)) {
+      return response.status(404).send({ message: "Poll not found" });
+    }
+
+    const poll = await PollModel.findById(id);
+    if (!poll) {
+      return response.status(404).send({ message: "Poll not found" });
+    }
+
+    // Etherlink signs with the address itself, Tezos with the public key.
+    const signer = network?.startsWith("etherlink")
+      ? publicKey
+      : getPkhfromPk(publicKey);
+
+    const isAuthor =
+      typeof poll.author === "string" &&
+      poll.author.toLowerCase() === String(signer).toLowerCase();
+
+    let isDaoAdmin = false;
+    if (!isAuthor) {
+      const daoQuery = mongoose.isValidObjectId(poll.daoID)
+        ? { _id: poll.daoID }
+        : { address: { $regex: new RegExp(`^${poll.daoID}$`, "i") } };
+      const dao = await DaoModel.findOne(daoQuery).lean();
+      // members[0] is the DAO creator, treated as the community admin.
+      const admin = dao?.members?.[0];
+      isDaoAdmin =
+        Boolean(admin) && String(admin).toLowerCase() === String(signer).toLowerCase();
+    }
+
+    if (!isAuthor && !isDaoAdmin) {
+      return response.status(403).send({ message: "Not authorized to link this poll" });
+    }
+
+    poll.onchainProposal = {
+      daoAddress,
+      proposalKey: proposalKey.trim(),
+      network: proposalNetwork.trim(),
+    };
+    await poll.save();
+
+    return response.status(200).json({ ok: true });
+  } catch (error) {
+    console.log("error: ", error);
+    return response.status(400).send({
+      message: error.message,
+    });
+  }
+};
+
 module.exports = {
   getPollById,
   getPollsById,
   addPoll,
+  linkProposal,
+  validateFundingRequest,
 };

@@ -6,7 +6,7 @@ const express = require("express");
 const pollsRoutes = express.Router();
 
 const { requireSignature } = require("../middlewares");
-const { getPollsById, getPollById, addPoll } = require("../components/polls");
+const { getPollsById, getPollById, addPoll, linkProposal } = require("../components/polls");
 
 /**
  * @swagger
@@ -71,5 +71,43 @@ pollsRoutes.route("/polls/:id/list").get(getPollsById);
  *         description: Invalid signature payload
  */
 pollsRoutes.route("/poll/add").all(requireSignature).post(addPoll);
+/**
+ * @swagger
+ * /polls/{id}/link-proposal:
+ *   post:
+ *     summary: Link a poll to the on-chain proposal it was promoted to
+ *     tags: [Polls]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         description: The ID of the poll
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               payloadBytes:
+ *                 type: string
+ *                 description: Signed payload holding daoAddress, proposalKey and network
+ *               publicKey:
+ *                 type: string
+ *               signature:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Proposal linked successfully
+ *       400:
+ *         description: Invalid signature payload or proposal details
+ *       403:
+ *         description: Signer is neither the poll author nor the community admin
+ *       404:
+ *         description: Poll not found
+ */
+pollsRoutes.route("/polls/:id/link-proposal").all(requireSignature).post(linkProposal);
 
 module.exports = pollsRoutes;

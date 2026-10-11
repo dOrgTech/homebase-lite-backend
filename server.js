@@ -54,6 +54,7 @@ app.use(require("./routes/tokens"));
 app.use(require("./routes/choices"));
 app.use(require("./routes/blocks"));
 app.use(require("./routes/aci"));
+app.use(require("./routes/subscriptions"));
 
 // Global error handler to avoid crashing without logs
 // Place after routes to catch any unhandled errors
