@@ -3,12 +3,12 @@ const { Schema } = require('@taquito/michelson-encoder');
 
 const networkNameMap = {
     mainnet: "mainnet",
-    ghostnet: "ghostnet",
+    shadownet: "shadownet",
 };
 
 const rpcNodes = {
-    mainnet: "https://mainnet.api.tez.ie",
-    ghostnet: "https://ghostnet.smartpy.io",
+    mainnet: process.env.RPC_URL_MAINNET || "https://tcinfra.net/rpc/tezos/mainnet",
+    shadownet: process.env.RPC_URL_SHADOWNET || "https://rpc.shadownet.teztnets.com",
 };
 
 function getFieldName(id) {
@@ -315,17 +315,15 @@ async function parseContractScript(c, initTokenTable = {}) {
     let token, counter = 0;
     const entryponts = Object.entries(c.entrypoints.entrypoints).reverse();
     if (entryponts.length == 0) {
-        console.log('Case 1')
         // handle the case of only "default" entrypoint
-        [token, counter] = parseSchema(
+        // (the semicolon matters: without it the line below is parsed as console.log(...)[token, counter] = ...)
+        ;[token, counter] = parseSchema(
             0,
             c.parameterSchema.generateSchema(),
             initTokenTable,
             "entrypoint"
         );
-        console.log('Token:', token)
     } else {
-        console.log('Case 2')
         // handle the case of multiple entrypoints
         const childrenToken = [];
         let childToken;
@@ -369,7 +367,7 @@ async function parseContractScript(c, initTokenTable = {}) {
 
 async function getContractEndpoints(network, contractAddress) {
     try {
-        const tezosNetwork = network === 'ghostnet' ? 'ghostnet' : 'mainnet'
+        const tezosNetwork = rpcNodes[network] ? network : 'mainnet'
         const tezos = new TezosToolkit(rpcNodes[tezosNetwork]);
         const contract = await tezos.contract.at(contractAddress);
         const endpoints = await parseContractScript(contract);

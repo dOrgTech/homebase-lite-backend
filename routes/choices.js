@@ -1,6 +1,7 @@
 const express = require("express");
 
 const { requireSignature } = require("../middlewares");
+const { catchAsync } = require("../services/response.util");
 
 const {
   getChoiceById,
@@ -55,7 +56,8 @@ choicesRoutes.route("/choices/:id/find").get(getChoiceById);
 choicesRoutes
   .route("/update/choice")
   .all(requireSignature)
-  .post(updateChoiceById);
+  // Wrap with catchAsync to capture and log errors with request context
+  .post(catchAsync(updateChoiceById));
 /**
  * @swagger
  * /choices/{id}/user_votes:

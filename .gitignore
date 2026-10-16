@@ -34,3 +34,15 @@ bun.lockb
 test.js
 .vscode
 bun.lockb
+
+# Local Netlify folder
+.netlify
+
+# Claude
+.claude/
+
+# Misc
+deno.lock
+
+# local signing key used by scripts, never commit
+.secret

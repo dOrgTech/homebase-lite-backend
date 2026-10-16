@@ -35,7 +35,6 @@ const {
  *       400:
  *         description: Invalid token
  */
-tokensRoutes.route("/token/add").post(addToken);
 /**
  * @swagger
  * /token/{id}:

@@ -133,7 +133,6 @@ daoRoutes.route("/daos/:id").get(getDAOById);
  *       400:
  *         description: Invalid signature payload
  */
-daoRoutes.route("/daos/create/voting").get(updateTotalHolders);
 /**
  * @swagger
  * /daos/count/{id}:
@@ -164,6 +163,7 @@ daoRoutes.route("/daos/create/voting").get(updateTotalHolders);
  *         description: Invalid signature payload
  */
 daoRoutes.route("/daos/count/:id").post(updateTotalCount);
+daoRoutes.route("/daos/:id/count").get(updateTotalCount);
 
 
 module.exports = daoRoutes;

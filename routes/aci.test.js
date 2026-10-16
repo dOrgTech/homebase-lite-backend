@@ -6,9 +6,10 @@ const app = express();
 app.use(express.json());
 app.use("/", aciRoutes);
 
+// Ghostnet is gone; use a mainnet lambda DAO (Ecosystem DAO) and shadownet (Omelette People) contracts.
 const contractIds = [
-    "KT1MzN5jLkbbq9P6WEFmTffUrYtK8niZavzH",
-    "KT1VG3ynsnyxFGzw9mdBwYnyZAF8HZvqnNkw",
+    "KT1MFxwTan4ptw6PSc3KK6e1xfzMrCb382tw",
+    "KT1NYT495uBmnimBJa74vdCS1DJnP9na4rsy",
     "I_AM_INVALID_ID"
 ]
 
@@ -22,14 +23,14 @@ describe("ACI Routes", () => {
     it("should return valid status on valid address ", async () => {
         await request(app)
         .post(`/aci/${contractIds[0]}`)
-        .send({network:"ghostnet"})
+        .send({network:"mainnet"})
         .expect(200)
         .expect("Content-Type", /json/)
     });
     it("should return valid JSON on valid address", async () => {
         const res = await request(app)
         .post(`/aci/${contractIds[0]}`)
-        .send({network:"ghostnet"})
+        .send({network:"mainnet"})
         .expect(200)
         .expect("Content-Type", /json/)
 
