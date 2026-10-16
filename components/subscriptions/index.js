@@ -3,6 +3,8 @@ const crypto = require("crypto");
 const { validateAddress, ValidationResult } = require("@taquito/utils");
 
 const SubscriptionModel = require("../../db/models/Subscription.model");
+const SubscriptionRequestModel = require("../../db/models/SubscriptionRequest.model");
+const { resolveDaoName } = require("../../services/dao-name.service");
 const {
   sendMail,
   getAppUrl,
@@ -16,6 +18,22 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/;
 
 const RATE_LIMIT_MAX = 5;
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
+// Mails per hour across all callers before the endpoint stops sending. This
+// caps what an abuser can do to the sending domain's reputation.
+const GLOBAL_RATE_LIMIT_MAX = Number(process.env.SUBSCRIPTION_MAILS_PER_HOUR || 300);
+const GLOBAL_KEY = "*";
+
+/**
+ * Throttle key for an email address. Mail providers deliver a+b@x and a@x,
+ * and (for Gmail) a.b@x and ab@x, to the same inbox, so those variants
+ * share one bucket; otherwise one inbox could be flooded through aliases.
+ */
+const throttleKey = (email) => {
+  const [local = "", domain = ""] = String(email).toLowerCase().split("@");
+  let base = local.split("+")[0];
+  if (domain === "gmail.com" || domain === "googlemail.com") base = base.replace(/\./g, "");
+  return `${base}@${domain}`;
+};
 
 /**
  * Per-email throttle for subscription requests.
@@ -54,7 +72,25 @@ const isRateLimited = (email) => {
   return false;
 };
 
-const resetRateLimit = () => rateLimitBuckets.clear();
+/**
+ * Durable throttle, shared by every instance: counts the requests that sent
+ * mail in the last hour for this key and for everyone.
+ */
+const isRateLimitedDurable = async (key) => {
+  const since = new Date(Date.now() - RATE_LIMIT_WINDOW_MS);
+  const [forKey, total] = await Promise.all([
+    SubscriptionRequestModel.countDocuments({ key, createdAt: { $gte: since } }),
+    SubscriptionRequestModel.countDocuments({ createdAt: { $gte: since } }),
+  ]);
+  return forKey >= RATE_LIMIT_MAX || total >= GLOBAL_RATE_LIMIT_MAX;
+};
+
+const recordRequest = (key) => SubscriptionRequestModel.create({ key });
+
+const resetRateLimit = () => {
+  rateLimitBuckets.clear();
+  return SubscriptionRequestModel.deleteMany({}).catch(() => {});
+};
 
 const generateToken = () => crypto.randomBytes(32).toString("hex");
 
@@ -159,7 +195,6 @@ const buildAlreadySubscribedEmail = ({ daoName, daoAddress, network, unsubscribe
  */
 const createSubscription = async (req, response) => {
   const { email, daoAddress, network } = req.body || {};
-  const daoName = cleanDaoName((req.body || {}).daoName);
 
   if (!isValidEmail(email)) {
     return response.status(400).json({ message: "Invalid email address" });
@@ -174,11 +209,18 @@ const createSubscription = async (req, response) => {
   const normalizedEmail = email.trim().toLowerCase();
   const normalizedNetwork = network.toLowerCase();
 
-  if (isRateLimited(normalizedEmail)) {
+  const key = throttleKey(normalizedEmail);
+  if (isRateLimited(key)) {
     return response.status(429).json({ message: "Too many subscription requests" });
   }
 
   try {
+    if (await isRateLimitedDurable(key)) {
+      return response.status(429).json({ message: "Too many subscription requests" });
+    }
+    // The name shown in the email comes from the indexer, never from the
+    // request, so nobody can put their own text into mail from this domain.
+    const daoName = await resolveDaoName(normalizedNetwork, daoAddress);
     let subscription = await SubscriptionModel.findOne({
       email: normalizedEmail,
       daoAddress,
@@ -218,6 +260,7 @@ const createSubscription = async (req, response) => {
         unsubscribeToken: subscription.unsubscribeToken,
       });
       await sendMail({ to: subscription.email, ...mail });
+      await recordRequest(key);
     } else {
       // Tell the mailbox owner rather than the page visitor, so the HTTP
       // response stays identical and reveals nothing about the address.
@@ -228,6 +271,7 @@ const createSubscription = async (req, response) => {
         unsubscribeToken: subscription.unsubscribeToken,
       });
       await sendMail({ to: subscription.email, ...mail });
+      await recordRequest(key);
     }
 
     return response.status(200).json({ ok: true });
@@ -269,16 +313,22 @@ const confirmSubscription = async (req, response) => {
 };
 
 /**
- * GET /subscriptions/unsubscribe/:token
+ * GET and POST /subscriptions/unsubscribe/:token
+ * GET serves the link in the email and redirects to the app; POST serves
+ * mail clients' one-click unsubscribe (RFC 8058) and answers 200.
  */
 const unsubscribeSubscription = async (req, response) => {
   const { token } = req.params;
+  const oneClick = req.method === "POST";
 
   try {
     const subscription = await SubscriptionModel.findOneAndDelete({
       unsubscribeToken: token,
     });
 
+    if (oneClick) {
+      return response.status(200).json({ ok: true });
+    }
     if (!subscription) {
       return response.redirect(302, `${getAppUrl()}/explorer/daos?alerts=invalid`);
     }
@@ -289,6 +339,9 @@ const unsubscribeSubscription = async (req, response) => {
     );
   } catch (error) {
     console.log("error: ", error);
+    if (oneClick) {
+      return response.status(200).json({ ok: true });
+    }
     return response.redirect(302, `${getAppUrl()}/explorer/daos?alerts=invalid`);
   }
 };
@@ -301,4 +354,5 @@ module.exports = {
   unsubscribeUrl,
   confirmUrl,
   resetRateLimit,
+  throttleKey,
 };
