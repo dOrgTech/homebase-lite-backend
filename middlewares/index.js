@@ -1,5 +1,5 @@
 const { verifySignature, bytes2Char } = require("@taquito/utils");
-const { verityEthSignture } = require("../utils-eth");
+const { verifyEthSignature } = require("../utils-eth");
 const securePayload = require("./secure-payload");
 
 function splitAtBrace(inputString) {
@@ -45,9 +45,12 @@ const requireSignature = async (request, response, next) => {
       hasPayloadBytes: Boolean(payloadBytes),
     });
     if(network?.startsWith("etherlink")){
-      const payloadBytes = request.body.payloadBytes
-      const isVerified = verityEthSignture(signature, payloadBytes)
+      // publicKey carries the signer's EVM address on Etherlink. The signature
+      // must recover to exactly that address, otherwise anyone could act as
+      // any holder by just naming them in the payload.
+      const isVerified = verifyEthSignature(signature, payloadBytes, publicKey)
       if(isVerified){
+        request.verifiedAddress = publicKey.toLowerCase()
         try{
         const [_, secondPart] = splitAtBrace(payloadBytes)
         const jsonString = secondPart
