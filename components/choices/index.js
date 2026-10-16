@@ -49,47 +49,169 @@ const getChoiceById = async (req, response) => {
   }
 };
 
+function escapeRegex(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// Both chains sign the same text: "Tezos Signed Message: <site> <ISO date> <json>".
+// Tezos sends it hex-encoded as a Micheline string, Etherlink sends the text.
+const getEthPayloadDate = (payloadBytes) => {
+  const parts = String(payloadBytes).split(" ");
+  return new Date(parts[4]).valueOf();
+};
+
+// Runs fn inside a transaction when the deployment supports one (Atlas does),
+// and plainly otherwise. The first write of a transaction fails before anything
+// is persisted when transactions are unsupported, so the fallback is safe.
+async function withTransaction(fn) {
+  let session;
+  try {
+    session = await mongoose.startSession();
+  } catch (e) {
+    return fn(null);
+  }
+  try {
+    let result;
+    await session.withTransaction(async () => {
+      result = await fn(session);
+    });
+    return result;
+  } catch (e) {
+    if (/Transaction numbers|replica set|transactions are not supported/i.test(e?.message || "")) {
+      return fn(null);
+    }
+    throw e;
+  } finally {
+    await session.endSession();
+  }
+}
+
+/**
+ * Records a verified voter's choices on a poll. Everything that decides
+ * whether a vote counts lives here, for both chains:
+ *  - every choice must belong to the poll the vote is signed for
+ *  - a single-choice poll accepts exactly one choice
+ *  - weight is split across choices in multi-choice polls
+ *  - a voter has one set of entries per poll: casting again replaces it
+ *  - a signed vote cannot be replayed, and an older signed vote cannot
+ *    overwrite a newer one
+ */
+async function castVote({ reqId, poll, address, addressMatch, isSameAddress, total, choiceIds, payloadBytes, signature, payloadDate, dateOf }) {
+  if (!Array.isArray(choiceIds) || choiceIds.length === 0) {
+    throw new Error("No choices sent in the request");
+  }
+  const ids = choiceIds.map((id) => String(id).trim());
+  if (new Set(ids).size !== ids.length) {
+    throw new Error("Duplicate choices found");
+  }
+  if (!ids.every((id) => mongoose.isValidObjectId(id))) {
+    throw new Error("Invalid choice id");
+  }
+  if (poll.votingStrategy === 0 && ids.length > 1) {
+    throw new Error("This poll accepts a single choice");
+  }
+  const owned = await ChoiceModel.countDocuments({ _id: { $in: ids }, pollID: poll._id });
+  if (owned !== ids.length) {
+    throw new Error("Choice does not belong to this poll");
+  }
+  if (!Number.isFinite(payloadDate)) {
+    throw new Error("Invalid payload timestamp");
+  }
+
+  const weight = new BigNumber(total.toString());
+  if (!weight.isFinite() || weight.lte(0)) {
+    throw new Error("No balance at proposal level");
+  }
+  const perChoice = ids.length > 1 ? weight.div(ids.length) : weight;
+  const payloadBytesHash = md5(payloadBytes);
+
+  return withVoteLock(String(poll._id), String(address).toLowerCase(), async () => {
+    const existing = await ChoiceModel.find({
+      pollID: poll._id,
+      walletAddresses: { $elemMatch: { address: addressMatch } },
+    }).lean();
+
+    for (const choice of existing) {
+      for (const entry of choice.walletAddresses || []) {
+        if (!isSameAddress(entry.address)) continue;
+        if (entry.payloadBytesHash && entry.payloadBytesHash === payloadBytesHash) {
+          throw new Error("This vote has already been recorded");
+        }
+        if (entry.payloadBytes) {
+          const previous = dateOf(entry.payloadBytes);
+          if (Number.isFinite(previous) && payloadDate <= previous) {
+            throw new Error("A newer vote from this address already exists");
+          }
+        }
+      }
+    }
+
+    const votedAt = new Date();
+    await withTransaction(async (session) => {
+      const opts = session ? { session } : {};
+      await ChoiceModel.updateMany(
+        { pollID: poll._id },
+        { $pull: { walletAddresses: { address: addressMatch } } },
+        opts
+      );
+      for (const choiceId of ids) {
+        await ChoiceModel.updateOne(
+          { _id: choiceId, pollID: poll._id },
+          {
+            $push: {
+              walletAddresses: {
+                address,
+                balanceAtReferenceBlock: perChoice.toFixed(),
+                choiceId,
+                payloadBytes,
+                payloadBytesHash,
+                signature,
+                votedAt,
+              },
+            },
+          },
+          opts
+        );
+      }
+    });
+    console.log("[choices.update:cast]", { reqId, pollID: String(poll._id), choices: ids.length, replaced: existing.length > 0 });
+  });
+}
+
 const updateChoiceById = async (req, response) => {
   const { payloadBytes, publicKey, signature } = req.body;
   const network = req.body.network;
   const reqId = req.id || "no-reqid";
   console.log("[choices.update:start]", { reqId, network, path: req.originalUrl });
-  let j = 0;
-  let i = 0;
   const timeNow = new Date().valueOf();
 
   if (network?.startsWith("etherlink")) {
     try {
-      console.log("[choices.update:eth:payload]", { reqId, length: Array.isArray(req.payloadObj) ? req.payloadObj.length : -1 });
       const castedChoices = req.payloadObj;
-      if (castedChoices.length === 0) throw new Error("No choices sent in the request");
-      const address = castedChoices[0].address
-      const pollId = castedChoices[0].pollID
+      if (!Array.isArray(castedChoices) || castedChoices.length === 0) {
+        throw new Error("No choices sent in the request");
+      }
+      const address = castedChoices[0].address;
+      const pollId = castedChoices[0].pollID;
       // requireSignature proved the signature belongs to req.body.publicKey;
       // the choices must be cast by that same address.
       if (typeof address !== "string" || !req.verifiedAddress || address.toLowerCase() !== req.verifiedAddress) {
         throw new Error("Invalid Proposal Body, choices address does not match the signer");
       }
-      console.log("[choices.update:eth:fetch-poll]", { reqId, pollId });
-      const poll = await PollModel.findById(pollId)
-
-      if(!poll) throw new Error("Poll not found")
-
+      if (!mongoose.isValidObjectId(pollId)) throw new Error("Invalid poll id");
+      const poll = await PollModel.findById(pollId);
+      if (!poll) throw new Error("Poll not found");
       if (timeNow > Number(poll.endTime)) {
         throw new Error("Proposal Already Ended");
       }
-      const daoFindQuery = {}
-      if(mongoose.isValidObjectId(poll.daoID)){
-        daoFindQuery._id = poll.daoID
+      const daoFindQuery = {};
+      if (mongoose.isValidObjectId(poll.daoID)) {
+        daoFindQuery._id = poll.daoID;
       } else {
-        daoFindQuery.address = { $regex: new RegExp(`^${poll.daoID}$`, 'i') };
+        daoFindQuery.address = { $regex: new RegExp(`^${escapeRegex(poll.daoID)}$`, "i") };
       }
-      console.log("[choices.update:eth:find-dao]", { reqId, daoFindQuery });
-      const dao = await DAOModel.findOne(daoFindQuery)
-      if (!dao) throw new Error(`DAO not found: ${poll.daoID}`)
-
-      const token = await TokenModel.findOne({ tokenAddress: dao.tokenAddress })
-      const block = poll.referenceBlock;
+      const dao = await DAOModel.findOne(daoFindQuery);
+      if (!dao) throw new Error(`DAO not found: ${poll.daoID}`);
 
       castedChoices.forEach((value) => {
         if (value.address !== address) {
@@ -100,145 +222,55 @@ const updateChoiceById = async (req, response) => {
         }
       });
 
-      const choiceIds = castedChoices.map((value) => value.choiceId);
-      let duplicates = choiceIds.filter(
-        (item, index) => choiceIds.indexOf(item.trim()) !== index
-      );
-      if (duplicates.length > 0) throw new Error("Duplicate choices found");
-
+      const block = poll.referenceBlock;
       console.log("[choices.update:eth:balance-request]", { reqId, net: dao.network || network, address, token: dao.tokenAddress, block });
-      const total = await getEthUserBalanceAtLevel(dao.network || network, address, dao.tokenAddress, block)
+      const total = await getEthUserBalanceAtLevel(dao.network || network, address, dao.tokenAddress, block);
       console.log("[choices.update:eth:balance-response]", { reqId, total: total?.toString?.() || total });
-
-      if (!total) {
+      if (total === undefined || total === null) {
         throw new Error("Could not get total power at reference block");
       }
 
-      // if (total.eq(0)) {
-      //   throw new Error("No balance at proposal level");
-      // }
-      
-      const isVoted = await ChoiceModel.find({
-        pollId: poll._id,
-        walletAddresses: { $elemMatch: { address: address } }
-      });
-      console.log("[choices.update:eth:is-voted]", { reqId, count: isVoted?.length || 0 });
-
-
-      const walletVote = {
+      const addressMatch = new RegExp(`^${escapeRegex(address)}$`, "i");
+      await castVote({
+        reqId,
+        poll,
         address,
-        balanceAtReferenceBlock: total.toString(),
+        addressMatch,
+        isSameAddress: (stored) => typeof stored === "string" && stored.toLowerCase() === address.toLowerCase(),
+        total,
+        choiceIds: castedChoices.map((value) => value.choiceId),
         payloadBytes,
-        payloadBytesHash: md5(payloadBytes),
         signature,
-      };
-
-      if (isVoted.length > 0) {
-        const oldVoteObj = isVoted[0].walletAddresses.find(x => x.address === address);
-        oldVote = await ChoiceModel.findById(oldVoteObj.choiceId);
-        console.log("[choices.update:eth:old-vote]", { reqId, hasOld: Boolean(oldVote) });
-
-        // TODO: Enable Repeat Vote
-        // const oldSignaturePayload = oldVote.walletAddresses[0].payloadBytes
-        // if (oldSignaturePayload) {
-        //   const oldSignatureDate =
-        //     getTimestampFromPayloadBytes(oldSignaturePayload);
-
-        //   if (payloadDate <= oldSignatureDate) {
-        //     throw new Error("Invalid Signature");
-        //   }
-        // }
-
-        for (value of castedChoices) {
-          const choiceId = value.choiceId
-          const updatePayload = {
-            $push: {
-              walletAddresses: {
-                ...walletVote,
-                choiceId,
-              }
-            },
-          }
-          if (oldVote) updatePayload.$pull = { walletAddresses: { address: address } }
-
-          if (poll.votingStrategy === 0) {
-            await ChoiceModel.updateOne(
-              { _id: choiceId },
-              updatePayload
-            )
-            console.log("[choices.update:eth:update-one]", { reqId, choiceId });
-          } else {
-            await ChoiceModel.updateMany(
-              { pollID: poll._id },
-              { $pull: { walletAddresses: { address } } },
-              { remove: true }
-            )
-            await ChoiceModel.updateOne(
-              { _id: choiceId },
-              updatePayload,
-              { upsert: true }
-            )
-            console.log("[choices.update:eth:update-many-one]", { reqId, choiceId });
-          }
-        }
-
-      } else {
-        if (castedChoices.length > 1) {
-          // const distributedWeight = total.div(new BigNumber(values.length));
-          // walletVote.balanceAtReferenceBlock = distributedWeight.toString();
-        }
-        for(const choice of castedChoices){
-          const choiceId = choice.choiceId
-          await ChoiceModel.updateOne(
-            {_id: choiceId},
-            {$push: {walletAddresses: walletVote}
-          })
-          console.log("[choices.update:eth:initial-vote]", { reqId, choiceId });
-        }
-      }
+        payloadDate: getEthPayloadDate(payloadBytes),
+        dateOf: getEthPayloadDate,
+      });
       return response.json({ success: true });
-    }
-    catch (error) {
+    } catch (error) {
       console.error("[choices.update:eth:error]", { reqId, error: error?.message, stack: error?.stack });
       return response.status(400).send({
         message: error.message,
       });
     }
-  }
-  else {
+  } else {
     try {
-      let oldVote = null;
-      console.log("[choices.update:tz:parse]", { reqId, payloadBytesLen: payloadBytes?.length });
       const values = getInputFromSigPayload(payloadBytes);
-      console.log("[choices.update:tz:values]", { reqId, count: values?.length || 0 });
-
+      if (!Array.isArray(values) || values.length === 0) {
+        throw new Error("No choices sent in the request");
+      }
       const payloadDate = getTimestampFromPayloadBytes(payloadBytes);
-      console.log("[choices.update:tz:payload-date]", { reqId, payloadDate });
-
       const pollID = values[0].pollID;
-      console.log("[choices.update:tz:poll-id]", { reqId, pollID });
-
+      if (!mongoose.isValidObjectId(pollID)) throw new Error("Invalid poll id");
       const poll = await PollModel.findById(pollID);
-      console.log("[choices.update:tz:poll]", { reqId, found: Boolean(poll) });
-
-      if (timeNow > poll.endTime) {
+      if (!poll) throw new Error("Poll not found");
+      if (timeNow > Number(poll.endTime)) {
         throw new Error("Proposal Already Ended");
       }
 
       const dao = await DAOModel.findById(poll.daoID);
-      console.log("[choices.update:tz:dao]", { reqId, found: Boolean(dao) });
-
+      if (!dao) throw new Error("DAO not found");
       const token = await TokenModel.findOne({ tokenAddress: dao.tokenAddress });
-      console.log("[choices.update:tz:token]", { reqId, tokenAddress: token?.tokenAddress });
-
       const block = poll.referenceBlock;
-
       const address = getPkhfromPk(publicKey);
-      console.log("[choices.update:tz:address]", { reqId, address });
-
-      if (values.length === 0) {
-        throw new Error("No choices sent in the request");
-      }
 
       values.forEach((value) => {
         if (value.address !== address) {
@@ -249,151 +281,33 @@ const updateChoiceById = async (req, response) => {
         }
       });
 
-      const choiceIds = values.map((value) => value.choiceId);
-      let duplicates = choiceIds.filter(
-        (item, index) => choiceIds.indexOf(item.trim()) !== index
-      );
-      if (duplicates.length > 0) {
-        throw new Error("Duplicate choices found");
-      }
-
       const total = await getUserTotalVotingPowerAtReferenceBlock(
         dao.network,
         dao.tokenAddress,
         dao.daoContract,
-        token.tokenID,
+        token?.tokenID,
         block,
         address,
         poll.isXTZ
       );
       console.log("[choices.update:tz:total]", { reqId, total: total?.toString?.() || total });
-
       if (!total) {
         throw new Error("Could not get total power at reference block");
       }
 
-      if (total.eq(0)) {
-        throw new Error("No balance at proposal level");
-      }
-
-      // Acquire lock to prevent race condition on concurrent votes
-      await withVoteLock(pollID, address, async () => {
-        const isVoted = await ChoiceModel.find({
-          pollID: poll._id,
-          walletAddresses: { $elemMatch: { address: address } },
-        }).lean();
-        console.log("[choices.update:tz:is-voted]", { reqId, count: isVoted?.length || 0 });
-
-        if (isVoted.length > 0) {
-        const oldVoteObj = isVoted[0].walletAddresses.find(x => x.address === address);
-        // isVoted[0] is already the Choice document containing the old vote
-        oldVote = isVoted[0];
-
-        const oldSignaturePayload = oldVoteObj?.payloadBytes;
-        if (oldSignaturePayload) {
-          const oldSignatureDate =
-            getTimestampFromPayloadBytes(oldSignaturePayload);
-
-          if (payloadDate <= oldSignatureDate) {
-            throw new Error("Invalid Signature");
-          }
-        }
-      }
-
-      await Promise.all(
-        values.map(async (value) => {
-          const { choiceId } = value;
-
-          let walletVote = {
-            address,
-            balanceAtReferenceBlock: total.toString(),
-            choiceId,
-            payloadBytes,
-            signature,
-          };
-
-          const choice = await ChoiceModel.findById(choiceId);
-
-          if (isVoted.length > 0) {
-            if (poll.votingStrategy === 0) {
-              const session = await mongoose.startSession();
-              session.startTransaction();
-
-              try {
-                if (oldVote) {
-                  await ChoiceModel.updateOne(
-                    { _id: oldVote._id },
-                    { $pull: { walletAddresses: { address } } },
-                    { session }
-                  );
-                }
-
-                await ChoiceModel.updateOne(
-                  { _id: choice._id },
-                  { $push: { walletAddresses: walletVote } },
-                  { session }
-                );
-
-                await session.commitTransaction();
-              } catch (e) {
-                console.error("[choices.update:tz:tx-error]", { reqId, error: e?.message, stack: e?.stack });
-                await session.abortTransaction();
-                console.log(e);
-                throw e;
-              } finally {
-                await session.endSession();
-              }
-            } else {
-              const session = await mongoose.startSession();
-              session.startTransaction();
-
-              const distributedWeight = total.div(new BigNumber(values.length));
-              walletVote.balanceAtReferenceBlock = distributedWeight.toString();
-
-              try {
-                await ChoiceModel.updateMany(
-                  { pollID: poll._id },
-                  { $pull: { walletAddresses: { address } } },
-                  { session }
-                );
-
-                await ChoiceModel.updateOne(
-                  { _id: choice._id },
-                  { $push: { walletAddresses: walletVote } },
-                  { session, upsert: true }
-                );
-
-                await session.commitTransaction();
-                i++;
-              } catch (e) {
-                console.error("[choices.update:tz:tx-error]", { reqId, error: e?.message, stack: e?.stack });
-                await session.abortTransaction();
-                console.log(e);
-                throw e;
-              } finally {
-                await session.endSession();
-              }
-            }
-          } else {
-            if (values.length > 1) {
-              const distributedWeight = total.div(new BigNumber(values.length));
-              walletVote.balanceAtReferenceBlock = distributedWeight.toString();
-            }
-
-            await ChoiceModel.updateOne(
-              { _id: choice._id },
-              { $push: { walletAddresses: walletVote } },
-              { upsert: true }
-            );
-            console.log("[choices.update:tz:initial-vote]", { reqId, choiceId: choice._id });
-
-            j++;
-          }
-        })
-      );
-      }); // end withVoteLock
-
-      console.log("[choices.update:tz:success]", { reqId });
+      await castVote({
+        reqId,
+        poll,
+        address,
+        addressMatch: address,
+        isSameAddress: (stored) => stored === address,
+        total,
+        choiceIds: values.map((value) => value.choiceId),
+        payloadBytes,
+        signature,
+        payloadDate,
+        dateOf: getTimestampFromPayloadBytes,
+      });
       response.json({ success: true });
     } catch (error) {
       console.error("[choices.update:tz:error]", { reqId, error: error?.message, stack: error?.stack });
