@@ -43,3 +43,6 @@ bun.lockb
 
 # Misc
 deno.lock
+
+# local signing key used by scripts, never commit
+.secret

@@ -12,7 +12,6 @@ const {
 } = require("../../utils");
 
 const axios = require("axios");
-const { uploadToIPFS } = require("../../services/ipfs.service");
 const DaoModel = require("../../db/models/Dao.model");
 const TokenModel = require("../../db/models/Token.model");
 const PollModel = require("../../db/models/Poll.model");

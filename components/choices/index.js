@@ -9,7 +9,6 @@ const {
 } = require("../../utils");
 const { default: BigNumber } = require("bignumber.js");
 const { getPkhfromPk } = require("@taquito/utils");
-const { uploadToIPFS } = require("../../services/ipfs.service");
 const DAOModel = require("../../db/models/Dao.model");
 const TokenModel = require("../../db/models/Token.model");
 const PollModel = require("../../db/models/Poll.model");
