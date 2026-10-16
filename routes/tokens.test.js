@@ -8,11 +8,11 @@ app.use("/", tokensRoutes);
 const id = 123;
 
 describe("Tokens Routes", () => {
-  it("should add a token that's invalid", async () => {
+  it("does not expose an unauthenticated token creation endpoint", async () => {
     await request(app)
       .post(`/token/add`)
       .send("")
-      .expect(400)
+      .expect(404)
   });
   it("should not get a token with an invalid id", async () => {
     await request(app)

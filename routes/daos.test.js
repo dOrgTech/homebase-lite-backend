@@ -61,11 +61,10 @@ describe("Daos Routes", () => {
     //  .expect(400)
     //  .expect("Content-Type", /json/)
   }, 30000);
-  it("should not add a new field to the DAO collection with an invalid signature payload", async () => {
+  it("does not expose the unauthenticated holder-count rewrite endpoint", async () => {
     await request(app)
       .get(`/daos/create/voting`)
-      .expect(400)
-      .expect("Content-Type", /json/)
+      .expect(404)
   });
   it("should not update total voting addresses count for a dao with an invalid ID", async () => {
     // Skip this test for now as it's failing due to MongoDB connection issues

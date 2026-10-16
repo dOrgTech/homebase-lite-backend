@@ -323,14 +323,54 @@ const tokenAbiForErc20 = [
     }
 ]
 
+const ETH_NETWORKS = {
+    etherlink_mainnet: {
+        rpc: "https://node.mainnet.etherlink.com",
+        rest: "https://explorer.etherlink.com/api/v2",
+    },
+    etherlink_shadownet: {
+        rpc: "https://node.shadownet.etherlink.com",
+        rest: "https://shadownet.explorer.etherlink.com/api/v2",
+    },
+    etherlink_testnet: {
+        rpc: "https://node.ghostnet.etherlink.com",
+        rest: "https://testnet.explorer.etherlink.com/api/v2",
+    },
+};
+
+// Network names arrive from signed payloads and stored records; only the
+// known ones may select an endpoint.
+function assertEthNetwork(network) {
+    if (typeof network !== "string" || !Object.prototype.hasOwnProperty.call(ETH_NETWORKS, network)) {
+        throw new Error("Network is not supported");
+    }
+    return network;
+}
+
 function _getEthProvider(network) {
-    const rpcEndpoint = network.includes("test") ? "https://node.ghostnet.etherlink.com" : "https://node.mainnet.etherlink.com";
-    return new JsonRpcProvider(rpcEndpoint);
+    return new JsonRpcProvider(ETH_NETWORKS[assertEthNetwork(network)].rpc);
 }
 
 function _getEthRestEndpoint(network) {
-    const rpcEndpoint = network.includes("test") ? "https://testnet.explorer.etherlink.com/api/v2" : "https://explorer.etherlink.com/api/v2";
-    return rpcEndpoint;
+    return ETH_NETWORKS[assertEthNetwork(network)].rest;
+}
+
+/**
+ * Voting token of an on-chain Homebase DAO on Etherlink, read from the DAO
+ * contract itself. Returns the lowercased address or null when the contract
+ * does not expose one.
+ */
+async function getEthDaoToken(network, daoAddress) {
+    try {
+        if (!ethers.isAddress(daoAddress)) return null;
+        const provider = _getEthProvider(network);
+        const dao = new ethers.Contract(daoAddress, ["function token() view returns (address)"], provider);
+        const token = await dao.token();
+        return ethers.isAddress(token) ? token.toLowerCase() : null;
+    } catch (error) {
+        console.error("[getEthDaoToken]", { network, daoAddress, error: error?.message });
+        return null;
+    }
 }
 
 async function _getEthTokenMetadataWithRpc(network, tokenAddress) {
@@ -482,6 +522,8 @@ console.log("from ETH")
 module.exports = {
     verityEthSignture,
     verifyEthSignature,
+    assertEthNetwork,
+    getEthDaoToken,
     getEthTokenMetadata,
     getEthCurrentBlock,
     getEthCurrentBlockNumber,
