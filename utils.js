@@ -2,7 +2,7 @@ const { TezosToolkit } = require("@taquito/taquito");
 const { bytes2Char } = require("@taquito/utils");
 const axios = require("axios");
 const { default: BigNumber } = require("bignumber.js");
-const { rpcNodes } = require("./services");
+const { rpcNodes, tzktApi, assertNetwork } = require("./services");
 
 const getInputFromSigPayload = (payloadBytes) => {
   const parsedPayloadBytesString = bytes2Char(payloadBytes);
@@ -14,7 +14,7 @@ const getInputFromSigPayload = (payloadBytes) => {
 };
 
 const getTotalSupplyAtCurrentBlock = async (network, address, tokenID) => {
-  const url = `https://api.${network}.tzkt.io/v1/tokens?contract=${address}&tokenId=${tokenID}`;
+  const url = `${tzktApi(network)}/v1/tokens?contract=${address}&tokenId=${tokenID}`;
   const response = await axios({ url, method: "GET" });
 
   if (response.status === 200 && response.data && response.data.length > 0) {
@@ -24,7 +24,7 @@ const getTotalSupplyAtCurrentBlock = async (network, address, tokenID) => {
 };
 
 const getCurrentBlock = async (network) => {
-  const url = `https://api.${network}.tzkt.io/v1/head`;
+  const url = `${tzktApi(network)}/v1/head`;
   const response = await axios({ url, method: "GET" });
 
   if (response.status === 200) {
@@ -38,7 +38,7 @@ const getUserTotalVotingWeightAtBlock = async (
   level,
   userAddress
 ) => {
-  const tezos = new TezosToolkit(rpcNodes[network]);
+  const tezos = new TezosToolkit(rpcNodes[assertNetwork(network)]);
   const token = await tezos.wallet.at(address);
 
   let userVotingPower = new BigNumber(0);
@@ -59,7 +59,7 @@ const getUserBalanceAtLevel = async (
   level,
   userAddress
 ) => {
-  const url = `https://api.${network}.tzkt.io/v1/tokens/historical_balances/${level}?account=${userAddress}&token.contract=${address}&token.tokenId=${tokenID}`;
+  const url = `${tzktApi(network)}/v1/tokens/historical_balances/${level}?account=${userAddress}&token.contract=${address}&token.tokenId=${tokenID}`;
   try {
     const response = await axios({ url, method: "GET" });
     if (response.status === 200) {
@@ -96,7 +96,7 @@ const getUserXTZBalanceAtLevelViaRpc = async (network, level, userAddress) => {
 };
 
 const getUserXTZBalanceAtLevel = async (network, level, userAddress) => {
-  const url = `https://api.${network}.tzkt.io/v1/accounts/${userAddress}/balance_history/${level}`;
+  const url = `${tzktApi(network)}/v1/accounts/${userAddress}/balance_history/${level}`;
   const response = await axios({ url, method: "GET" });
 
   if (response.status === 200) {
@@ -117,7 +117,7 @@ const getUserDAODepositBalanceAtLevel = async (
   daoAddress,
   level
 ) => {
-  const url = `https://api.${network}.tzkt.io/v1/contracts/${daoAddress}/bigmaps/freeze_history/historical_keys/${level}?key.eq=${accountAddress}`;
+  const url = `${tzktApi(network)}/v1/contracts/${daoAddress}/bigmaps/freeze_history/historical_keys/${level}?key.eq=${accountAddress}`;
   const response = await axios({ url, method: "GET" });
   if (response.status !== 200) {
     throw new Error("Failed to fetch user dao balance");
@@ -208,7 +208,7 @@ const getUserTotalVotingPowerAtReferenceBlock = async (
 };
 
 const isTokenDelegationSupported = async (network, address) => {
-  const tezos = new TezosToolkit(rpcNodes[network]);
+  const tezos = new TezosToolkit(rpcNodes[assertNetwork(network)]);
   const token = await tezos.wallet.at(address);
 
   const contractViews = Object.keys(token.contractViews);
@@ -222,7 +222,7 @@ const isTokenDelegationSupported = async (network, address) => {
 };
 
 const getTokenHoldersCount = async (network, address, tokenID) => {
-  const url = `https://api.${network}.tzkt.io/v1/tokens?tokenId=${tokenID}&contract=${address}`;
+  const url = `${tzktApi(network)}/v1/tokens?tokenId=${tokenID}&contract=${address}`;
 
   const response = await axios({ url, method: "GET" });
   if (response.status !== 200) {
@@ -234,6 +234,24 @@ const getTokenHoldersCount = async (network, address, tokenID) => {
     return result[0].holdersCount;
   }
   return 0;
+};
+
+/**
+ * Governance token of an on-chain Homebase DAO, read from its storage on
+ * TzKT. Returns { address, tokenId } or null when the contract is not a
+ * Homebase DAO (or cannot be read).
+ */
+const getDaoGovernanceToken = async (network, daoContract) => {
+  try {
+    const url = `${tzktApi(network)}/v1/contracts/${encodeURIComponent(daoContract)}/storage`;
+    const response = await axios({ url, method: "GET" });
+    const token = response?.data?.governance_token;
+    if (!token || typeof token.address !== "string") return null;
+    return { address: token.address, tokenId: String(token.token_id ?? "0") };
+  } catch (error) {
+    console.error("[getDaoGovernanceToken]", { network, daoContract, error: error?.message });
+    return null;
+  }
 };
 
 const getTimestampFromPayloadBytes = (payloadBytes) => {
@@ -276,5 +294,6 @@ module.exports = {
   getTokenHoldersCount,
   getUserXTZBalanceAtLevel,
   getTimestampFromPayloadBytes,
+  getDaoGovernanceToken,
   getIPFSProofFromPayload,
 };

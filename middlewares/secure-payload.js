@@ -241,4 +241,33 @@ const securePayload = (req, res, next) => {
   }
 };
 
+/**
+ * Sanitizes one rich-text field (poll or DAO description). Keeps the safe
+ * subset of HTML the app renders and drops everything executable.
+ */
+function sanitizeHtml(value) {
+  if (typeof value !== "string") return "";
+  return sanitizeObject(value);
+}
+
+/** Reduces a field to plain text: tags removed, whitespace collapsed. */
+function stripTags(value) {
+  if (typeof value !== "string") return "";
+  return sanitizeHtml(value).replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
+}
+
+/** Accepts only absolute http(s) or ipfs URLs; anything else becomes "". */
+function cleanUrl(value, { allowIpfs = false } = {}) {
+  if (typeof value !== "string") return "";
+  const trimmed = value.trim();
+  if (trimmed === "") return "";
+  if (/^https?:\/\//i.test(trimmed)) return trimmed.slice(0, 2048);
+  if (allowIpfs && /^ipfs:\/\//i.test(trimmed)) return trimmed.slice(0, 2048);
+  return "";
+}
+
 module.exports = securePayload;
+module.exports.sanitizeObject = sanitizeObject;
+module.exports.sanitizeHtml = sanitizeHtml;
+module.exports.stripTags = stripTags;
+module.exports.cleanUrl = cleanUrl;
