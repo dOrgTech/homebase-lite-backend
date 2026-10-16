@@ -81,6 +81,7 @@ subscriptionsRoutes.route("/subscriptions/confirm/:token").get(confirmSubscripti
  */
 subscriptionsRoutes
   .route("/subscriptions/unsubscribe/:token")
-  .get(unsubscribeSubscription);
+  .get(unsubscribeSubscription)
+  .post(unsubscribeSubscription);
 
 module.exports = subscriptionsRoutes;

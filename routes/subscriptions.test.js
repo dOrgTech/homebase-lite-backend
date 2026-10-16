@@ -32,7 +32,7 @@ describe("Subscriptions Routes", () => {
 
   beforeEach(async () => {
     await SubscriptionModel.deleteMany({});
-    resetRateLimit();
+    await resetRateLimit();
     sendMail.mockClear();
   });
 
@@ -155,6 +155,28 @@ describe("Subscriptions Routes", () => {
 
       await request(app).post("/subscriptions").send(body).expect(429);
     });
+
+    it("should count plus-tag and dot variants of a mailbox as one", async () => {
+      const variants = ["a.b+1@gmail.com", "ab+2@gmail.com", "a.b@gmail.com", "AB+x@gmail.com", "a.b.+y@gmail.com"];
+      for (const email of variants) {
+        await request(app).post("/subscriptions").send({ email, daoAddress: DAO_ADDRESS, network: "mainnet" }).expect(200);
+      }
+      await request(app)
+        .post("/subscriptions")
+        .send({ email: "ab@gmail.com", daoAddress: DAO_ADDRESS, network: "mainnet" })
+        .expect(429);
+    });
+
+    it("should not put a caller-supplied name into the email", async () => {
+      await request(app)
+        .post("/subscriptions")
+        .send({ email: "user@example.com", daoAddress: DAO_ADDRESS, network: "mainnet", daoName: "URGENT claim at evil.example" })
+        .expect(200);
+      expect(sendMail).toHaveBeenCalledTimes(1);
+      const mail = sendMail.mock.calls[0][0];
+      expect(mail.subject).not.toContain("evil.example");
+      expect(mail.text).not.toContain("evil.example");
+    });
   });
 
   describe("GET /subscriptions/confirm/:token", () => {
@@ -186,6 +208,25 @@ describe("Subscriptions Routes", () => {
         .expect(302);
 
       expect(response.headers.location).toBe(`${APP_URL}/explorer/daos?alerts=invalid`);
+    });
+  });
+
+  describe("POST /subscriptions/unsubscribe/:token (one-click)", () => {
+    it("should delete the subscription and answer 200 without a redirect", async () => {
+      const subscription = await SubscriptionModel.create({
+        email: "user@example.com",
+        daoAddress: DAO_ADDRESS,
+        network: "mainnet",
+        confirmed: true,
+        confirmToken: "c".repeat(64),
+        unsubscribeToken: "u".repeat(64),
+      });
+      await request(app)
+        .post(`/subscriptions/unsubscribe/${subscription.unsubscribeToken}`)
+        .send("List-Unsubscribe=One-Click")
+        .expect(200);
+      expect(await SubscriptionModel.findById(subscription._id)).toBeNull();
+      await request(app).post(`/subscriptions/unsubscribe/${"z".repeat(64)}`).expect(200);
     });
   });
 

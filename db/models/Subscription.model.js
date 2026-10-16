@@ -47,6 +47,13 @@ SubscriptionModelSchema.index(
   { unique: true }
 );
 
+// A request that is never confirmed is forgotten after a week, so the
+// collection does not keep addresses that were submitted by someone else.
+SubscriptionModelSchema.index(
+  { createdAt: 1 },
+  { expireAfterSeconds: 7 * 24 * 60 * 60, partialFilterExpression: { confirmed: false } }
+);
+
 const SubscriptionModel = mongoose.model(
   'Subscription',
   SubscriptionModelSchema,
