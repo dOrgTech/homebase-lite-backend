@@ -65,6 +65,11 @@ const updateChoiceById = async (req, response) => {
       if (castedChoices.length === 0) throw new Error("No choices sent in the request");
       const address = castedChoices[0].address
       const pollId = castedChoices[0].pollID
+      // requireSignature proved the signature belongs to req.body.publicKey;
+      // the choices must be cast by that same address.
+      if (typeof address !== "string" || !req.verifiedAddress || address.toLowerCase() !== req.verifiedAddress) {
+        throw new Error("Invalid Proposal Body, choices address does not match the signer");
+      }
       console.log("[choices.update:eth:fetch-poll]", { reqId, pollId });
       const poll = await PollModel.findById(pollId)
 

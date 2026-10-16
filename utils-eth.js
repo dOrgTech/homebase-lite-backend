@@ -360,34 +360,28 @@ async function _getEthTokenMetadataWithRest(network, tokenAddress) {
         holders: data?.holders,
     }
 }
-// ⚠️ To be Implemented
-function verityEthSignture(signature, payloadBytes) {
-
-    return true;
+// Verifies an EIP-191 personal_sign signature (what wagmi's signMessage
+// produces) over the plain-text payload and checks that the recovered signer
+// is the address the request claims to come from. Returns true only when both
+// hold; never throws.
+function verifyEthSignature(signature, payloadBytes, expectedAddress) {
+    if (typeof signature !== 'string' || typeof payloadBytes !== 'string' || typeof expectedAddress !== 'string') {
+        return false;
+    }
+    if (!ethers.isAddress(expectedAddress)) {
+        return false;
+    }
     try {
-        const values = ethers.utils.recoverMessage(payloadBytes, signature);
-
-        // // Convert the payload bytes to a string
-        // const payloadString = ethers.utils.toUtf8String(payloadBytes);
-
-        // // Split the string into parts
-        // const parts = payloadString.split(' ');
-
-        // // Extract the JSON part (assuming it's the last part)
-        // const jsonString = parts.slice(5).join(' ');
-
-        // // Parse the JSON string
-        // const values = JSON.parse(jsonString);
-
-        return values;
-
+        const recovered = ethers.verifyMessage(payloadBytes, signature);
+        return recovered.toLowerCase() === expectedAddress.toLowerCase();
     } catch (error) {
-
-        console.error('Error parsing Ethereum signature payload:', error);
-        throw new Error('Invalid Ethereum signature payload');
-
+        console.error('[verifyEthSignature] could not recover signer:', error?.message);
+        return false;
     }
 }
+
+// Kept under the historical (misspelled) name for existing imports.
+const verityEthSignture = verifyEthSignature;
 
 // ✅ Working
 async function getEthTokenMetadata(network, tokenAddress) {
@@ -487,6 +481,7 @@ console.log("from ETH")
 
 module.exports = {
     verityEthSignture,
+    verifyEthSignature,
     getEthTokenMetadata,
     getEthCurrentBlock,
     getEthCurrentBlockNumber,
