@@ -4,6 +4,8 @@ const {
   createSubscription,
   confirmSubscription,
   unsubscribeSubscription,
+  confirmPage,
+  unsubscribePage,
 } = require("../components/subscriptions");
 
 // recordRoutes is an instance of the express router.
@@ -47,6 +49,8 @@ subscriptionsRoutes.route("/subscriptions").post(createSubscription);
  * @swagger
  * /subscriptions/confirm/{token}:
  *   get:
+ *     summary: Page with a button that confirms the subscription (changes nothing by itself)
+ *   post:
  *     summary: Confirm an email subscription
  *     tags: [Subscriptions]
  *     parameters:
@@ -57,16 +61,23 @@ subscriptionsRoutes.route("/subscriptions").post(createSubscription);
  *         schema:
  *           type: string
  *     responses:
- *       302:
+ *       303:
  *         description: Redirect to the DAO page, or to the app root for an unknown token
  */
-subscriptionsRoutes.route("/subscriptions/confirm/:token").get(confirmSubscription);
+// GET only shows a page: link scanners in mail filters fetch every link in an email, and a
+// confirmation they trigger would subscribe an address its owner never confirmed.
+subscriptionsRoutes
+  .route("/subscriptions/confirm/:token")
+  .get(confirmPage)
+  .post(confirmSubscription);
 
 /**
  * @swagger
  * /subscriptions/unsubscribe/{token}:
  *   get:
- *     summary: Remove an email subscription
+ *     summary: Page with a button that removes the subscription (changes nothing by itself)
+ *   post:
+ *     summary: Remove an email subscription (also mail clients' one-click unsubscribe)
  *     tags: [Subscriptions]
  *     parameters:
  *       - in: path
@@ -76,12 +87,12 @@ subscriptionsRoutes.route("/subscriptions/confirm/:token").get(confirmSubscripti
  *         schema:
  *           type: string
  *     responses:
- *       302:
+ *       303:
  *         description: Redirect to the DAO page, or to the app root for an unknown token
  */
 subscriptionsRoutes
   .route("/subscriptions/unsubscribe/:token")
-  .get(unsubscribeSubscription)
+  .get(unsubscribePage)
   .post(unsubscribeSubscription);
 
 module.exports = subscriptionsRoutes;
