@@ -283,8 +283,67 @@ const createSubscription = async (req, response) => {
   }
 };
 
+// The links in our emails open these pages. A GET changes nothing: mail filters and link
+// scanners fetch every link they see, so the change happens only when the reader presses the
+// button, which POSTs back to the same URL with ?via=page.
+const actionPage = ({ title, text, button }) =>
+  [
+    "<!doctype html>",
+    '<html lang="en"><head><meta charset="utf-8">',
+    '<meta name="viewport" content="width=device-width, initial-scale=1">',
+    '<meta name="robots" content="noindex">',
+    `<title>${escapeHtml(title)}</title>`,
+    "<style>",
+    "body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;",
+    "background:#1c1f23;color:#fff;font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}",
+    "main{max-width:420px;padding:32px 24px;text-align:center}",
+    "h1{font-size:22px;margin:0 0 12px}p{color:#bfc5ca;margin:0 0 24px}",
+    "button{background:#81feb7;color:#1c1f23;border:0;border-radius:4px;padding:12px 28px;",
+    "font:inherit;font-weight:600;cursor:pointer}",
+    "</style></head><body><main>",
+    `<h1>${escapeHtml(title)}</h1>`,
+    `<p>${escapeHtml(text)}</p>`,
+    '<form method="post" action="?via=page">',
+    `<button type="submit">${escapeHtml(button)}</button>`,
+    "</form></main></body></html>",
+  ].join("\n");
+
+const sendActionPage = (response, page) =>
+  response
+    .status(200)
+    .set({
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "no-store",
+      // The token is in the URL: never pass it on to another site.
+      "Referrer-Policy": "no-referrer",
+      "X-Robots-Tag": "noindex",
+      "Content-Security-Policy":
+        "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+    })
+    .send(actionPage(page));
+
 /**
  * GET /subscriptions/confirm/:token
+ */
+const confirmPage = (req, response) =>
+  sendActionPage(response, {
+    title: "Confirm Homebase alerts",
+    text: "Press the button to start receiving email alerts for this DAO.",
+    button: "Confirm subscription",
+  });
+
+/**
+ * GET /subscriptions/unsubscribe/:token
+ */
+const unsubscribePage = (req, response) =>
+  sendActionPage(response, {
+    title: "Unsubscribe from Homebase alerts",
+    text: "Press the button to stop receiving email alerts for this DAO.",
+    button: "Unsubscribe",
+  });
+
+/**
+ * POST /subscriptions/confirm/:token
  */
 const confirmSubscription = async (req, response) => {
   const { token } = req.params;
@@ -293,7 +352,7 @@ const confirmSubscription = async (req, response) => {
     const subscription = await SubscriptionModel.findOne({ confirmToken: token });
 
     if (!subscription) {
-      return response.redirect(302, `${getAppUrl()}/explorer/daos?alerts=invalid`);
+      return response.redirect(303, `${getAppUrl()}/explorer/daos?alerts=invalid`);
     }
 
     if (!subscription.confirmed) {
@@ -303,23 +362,23 @@ const confirmSubscription = async (req, response) => {
     }
 
     return response.redirect(
-      302,
+      303,
       `${getAppUrl()}/explorer/dao/${subscription.daoAddress}?alerts=confirmed`
     );
   } catch (error) {
     console.log("error: ", error);
-    return response.redirect(302, `${getAppUrl()}/explorer/daos?alerts=invalid`);
+    return response.redirect(303, `${getAppUrl()}/explorer/daos?alerts=invalid`);
   }
 };
 
 /**
- * GET and POST /subscriptions/unsubscribe/:token
- * GET serves the link in the email and redirects to the app; POST serves
- * mail clients' one-click unsubscribe (RFC 8058) and answers 200.
+ * POST /subscriptions/unsubscribe/:token
+ * From the page (?via=page) it redirects to the app; without it, it is a mail client's
+ * one-click unsubscribe (RFC 8058) and answers 200.
  */
 const unsubscribeSubscription = async (req, response) => {
   const { token } = req.params;
-  const oneClick = req.method === "POST";
+  const oneClick = req.query.via !== "page";
 
   try {
     const subscription = await SubscriptionModel.findOneAndDelete({
@@ -330,11 +389,11 @@ const unsubscribeSubscription = async (req, response) => {
       return response.status(200).json({ ok: true });
     }
     if (!subscription) {
-      return response.redirect(302, `${getAppUrl()}/explorer/daos?alerts=invalid`);
+      return response.redirect(303, `${getAppUrl()}/explorer/daos?alerts=invalid`);
     }
 
     return response.redirect(
-      302,
+      303,
       `${getAppUrl()}/explorer/dao/${subscription.daoAddress}?alerts=unsubscribed`
     );
   } catch (error) {
@@ -342,7 +401,7 @@ const unsubscribeSubscription = async (req, response) => {
     if (oneClick) {
       return response.status(200).json({ ok: true });
     }
-    return response.redirect(302, `${getAppUrl()}/explorer/daos?alerts=invalid`);
+    return response.redirect(303, `${getAppUrl()}/explorer/daos?alerts=invalid`);
   }
 };
 
@@ -350,6 +409,8 @@ module.exports = {
   createSubscription,
   confirmSubscription,
   unsubscribeSubscription,
+  confirmPage,
+  unsubscribePage,
   SUPPORTED_NETWORKS,
   unsubscribeUrl,
   confirmUrl,
